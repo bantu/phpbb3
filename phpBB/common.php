@@ -236,7 +236,7 @@ foreach ($cache->obtain_hooks() as $hook)
 if (!$config['use_system_cron'])
 {
 	include($phpbb_root_path . 'includes/cron/cron_manager.' . $phpEx);
-	$cron = new cron();
+	$cron = new cron_manager();
 }
 
 ?>
