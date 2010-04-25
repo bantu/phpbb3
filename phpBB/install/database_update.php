@@ -1751,6 +1751,10 @@ function change_database_data(&$no_updates, $version)
 
 			$no_updates = false;
 		break;
+
+		case '3.0.8-dev':
+			set_config('use_system_cron', 0);
+		break;
 	}
 }
 
