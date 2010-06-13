@@ -3506,6 +3506,11 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 		$msg_text = $msg_long_text;
 	}
 
+	if (!defined('E_STRICT'))
+	{
+		define('E_STRICT', 2048);
+	}
+
 	if (!defined('E_DEPRECATED'))
 	{
 		define('E_DEPRECATED', 8192);
@@ -3709,6 +3714,7 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 		break;
 
 		// PHP4 compatibility
+		case E_STRICT:
 		case E_DEPRECATED:
 			return true;
 		break;
