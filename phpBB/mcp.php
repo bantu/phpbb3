@@ -331,14 +331,15 @@ function extra_url()
 {
 	global $forum_id, $topic_id, $post_id, $report_id, $user_id;
 
-	$url_extra = '';
-	$url_extra .= ($forum_id) ? "&amp;f=$forum_id" : '';
-	$url_extra .= ($topic_id) ? "&amp;t=$topic_id" : '';
-	$url_extra .= ($post_id) ? "&amp;p=$post_id" : '';
-	$url_extra .= ($user_id) ? "&amp;u=$user_id" : '';
-	$url_extra .= ($report_id) ? "&amp;r=$report_id" : '';
+	$url_extra = array();
 
-	return $url_extra;
+	($forum_id)		? $url_extra[] = "f=$forum_id"	: true;
+	($topic_id)		? $url_extra[] = "t=$topic_id"	: true;
+	($post_id)		? $url_extra[] = "p=$post_id"	: true;
+	($user_id)		? $url_extra[] = "u=$user_id"	: true;
+	($report_id)	? $url_extra[] = "r=$report_id"	: true;
+
+	return implode('&amp;', $url_extra);
 }
 
 /**
