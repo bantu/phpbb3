@@ -338,6 +338,8 @@ function extra_url()
 	$url_extra .= ($user_id) ? "&amp;u=$user_id" : '';
 	$url_extra .= ($report_id) ? "&amp;r=$report_id" : '';
 
+	$url_extra = implode('&amp;', array_diff(explode('&amp;', $url_extra), array('')));
+
 	return $url_extra;
 }
 
