@@ -81,9 +81,10 @@ if ($user->load && $config['limit_search_load'] && ($user->load > doubleval($con
 	trigger_error('NO_SEARCH_TIME');
 }
 
-// Check flood limit ... if applicable
+// It is applicable if the configuration setting is non-zero, and the user cannot
+// ignore the flood setting, and the search is a keyword search.
 $interval = ($user->data['user_id'] == ANONYMOUS) ? $config['search_anonymous_interval'] : $config['search_interval'];
-if ($interval && !$auth->acl_get('u_ignoreflood'))
+if ($interval && !in_array($search_id, array('unreadposts', 'unanswered', 'active_topics', 'egosearch')) && !$auth->acl_get('u_ignoreflood'))
 {
 	if ($user->data['user_last_search'] > time() - $interval)
 	{
@@ -891,7 +892,7 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 
 					'S_TOPIC_GLOBAL'		=> (!$forum_id) ? true : false,
 					'S_TOPIC_TYPE'			=> $row['topic_type'],
-					'S_USER_POSTED'			=> (!empty($row['mark_type'])) ? true : false,
+					'S_USER_POSTED'			=> (!empty($row['topic_posted'])) ? true : false,
 					'S_UNREAD_TOPIC'		=> $unread_topic,
 
 					'S_TOPIC_REPORTED'		=> (!empty($row['topic_reported']) && $auth->acl_get('m_report', $forum_id)) ? true : false,
