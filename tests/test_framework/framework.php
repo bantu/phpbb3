@@ -31,7 +31,7 @@ require_once 'PHPUnit/Runner/Version.php';
 $phpunit_version = PHPUnit_Runner_Version::id();
 if (version_compare($phpunit_version, '3.3.0', '<') && strpos($phpunit_version, '@') !== 0)
 {
-	trigger_error('PHPUnit >= 3.3.0 required');
+	trigger_error('PHPUnit >= 3.3.0 required', E_USER_ERROR);
 }
 
 require_once 'PHPUnit/Framework.php';
