@@ -130,7 +130,7 @@ class session
 			'root_script_path'	=> str_replace(' ', '%20', htmlspecialchars($root_script_path)),
 
 			'page'				=> $page,
-			'forum'				=> (isset($_REQUEST['f']) && $_REQUEST['f'] > 0) ? (int) $_REQUEST['f'] : 0,
+			'forum'				=> request_var('f', 0),
 		);
 
 		return $page_array;
@@ -285,6 +285,17 @@ class session
 				break;
 			}
 
+			// Quick check for IPv4-mapped address in IPv6
+			if (stripos($ip, '::ffff:') === 0)
+			{
+				$ipv4 = substr($ip, 7);
+
+				if (preg_match(get_preg_expression('ipv4'), $ipv4))
+				{
+					$ip = $ipv4;
+				}
+			}
+
 			// Use the last in chain
 			$this->ip = $ip;
 		}
@@ -307,7 +318,7 @@ class session
 		}
 
 		// Is session_id is set or session_id is set and matches the url param if required
-		if (!empty($this->session_id) && (!defined('NEED_SID') || (isset($_GET['sid']) && $this->session_id === $_GET['sid'])))
+		if (!empty($this->session_id) && (!defined('NEED_SID') || (isset($_GET['sid']) && $this->session_id === request_var('sid', ''))))
 		{
 			$sql = 'SELECT u.*, s.*
 				FROM ' . SESSIONS_TABLE . ' s, ' . USERS_TABLE . " u
@@ -748,7 +759,7 @@ class session
 
 				if ((int) $row['sessions'] > (int) $config['active_sessions'])
 				{
-					header('HTTP/1.1 503 Service Unavailable');
+					send_status_line(503, 'Service Unavailable');
 					trigger_error('BOARD_UNAVAILABLE');
 				}
 			}
@@ -1580,11 +1591,12 @@ class user extends session
 		$this->add_lang($lang_set);
 		unset($lang_set);
 
-		if (!empty($_GET['style']) && $auth->acl_get('a_styles') && !defined('ADMIN_START'))
+		$style_request = request_var('style', 0);
+		if ($style_request && $auth->acl_get('a_styles') && !defined('ADMIN_START'))
 		{
 			global $SID, $_EXTRA_URL;
 
-			$style = request_var('style', 0);
+			$style = $style_request;
 			$SID .= '&amp;style=' . $style;
 			$_EXTRA_URL = array('style=' . $style);
 		}
@@ -1821,7 +1833,7 @@ class user extends session
 		{
 			if ($this->data['is_bot'])
 			{
-				header('HTTP/1.1 503 Service Unavailable');
+				send_status_line(503, 'Service Unavailable');
 			}
 
 			$message = (!empty($config['board_disable_msg'])) ? $config['board_disable_msg'] : 'BOARD_DISABLE';
@@ -1840,7 +1852,7 @@ class user extends session
 				{
 					if ($this->data['is_bot'])
 					{
-						header('HTTP/1.1 503 Service Unavailable');
+						send_status_line(503, 'Service Unavailable');
 					}
 					trigger_error('BOARD_UNAVAILABLE');
 				}

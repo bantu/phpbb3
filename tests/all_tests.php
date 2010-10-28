@@ -26,9 +26,17 @@ require_once 'dbal/all_tests.php';
 require_once 'regex/all_tests.php';
 require_once 'network/all_tests.php';
 require_once 'random/all_tests.php';
+require_once 'download/all_tests.php';
 
 // exclude the test directory from code coverage reports
-PHPUnit_Util_Filter::addDirectoryToFilter('./');
+if (version_compare(PHPUnit_Runner_Version::id(), '3.5.0') >= 0)
+{
+	PHP_CodeCoverage_Filter::getInstance()->addDirectoryToBlacklist('./');
+}
+else
+{
+	PHPUnit_Util_Filter::addDirectoryToFilter('./');
+}
 
 class phpbb_all_tests
 {
@@ -52,6 +60,7 @@ class phpbb_all_tests
 		$suite->addTest(phpbb_regex_all_tests::suite());
 		$suite->addTest(phpbb_network_all_tests::suite());
 		$suite->addTest(phpbb_random_all_tests::suite());
+		$suite->addTest(phpbb_download_all_tests::suite());
 
 		return $suite;
 	}
