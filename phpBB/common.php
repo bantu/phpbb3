@@ -240,7 +240,7 @@ foreach ($cache->obtain_hooks() as $hook)
 
 if (!$config['use_system_cron'])
 {
-	$cron = new cron_manager();
+	$cron = new phpbb_cron_manager();
 }
 
 ?>
