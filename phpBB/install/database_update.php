@@ -925,7 +925,7 @@ function database_update_info()
 *****************************************************************************/
 function change_database_data(&$no_updates, $version)
 {
-	global $db, $errored, $error_ary, $config, $phpbb_root_path, $phpEx, $user;
+	global $db, $errored, $error_ary, $config, $phpbb_root_path, $phpEx;
 
 	switch ($version)
 	{
@@ -1653,36 +1653,86 @@ function change_database_data(&$no_updates, $version)
 
 		// Changes from 3.0.7-PL1 to 3.0.8-RC1
 		case '3.0.7-PL1':
-			$user->add_lang('acp/attachments');
-			$extension_groups = array(
-				$user->lang['EXT_GROUP_ARCHIVES']			=> 'ARCHIVES',
-				$user->lang['EXT_GROUP_DOCUMENTS']			=> 'DOCUMENTS',
-				$user->lang['EXT_GROUP_DOWNLOADABLE_FILES']	=> 'DOWNLOADABLE_FILES',
-				$user->lang['EXT_GROUP_FLASH_FILES']		=> 'FLASH_FILES',
-				$user->lang['EXT_GROUP_IMAGES']				=> 'IMAGES',
-				$user->lang['EXT_GROUP_PLAIN_TEXT']			=> 'PLAIN_TEXT',
-				$user->lang['EXT_GROUP_QUICKTIME_MEDIA']	=> 'QUICKTIME_MEDIA',
-				$user->lang['EXT_GROUP_REAL_MEDIA']			=> 'REAL_MEDIA',
-				$user->lang['EXT_GROUP_WINDOWS_MEDIA']		=> 'WINDOWS_MEDIA',
-			);
+			// Get all installed languages.
+			$sql = 'SELECT lang_dir
+				FROM ' . LANG_TABLE;
+			$result = $db->sql_query($sql);
 
+			$languages = array();
+			while ($row = $db->sql_fetchrow($result))
+			{
+				$languages[] = basename($row['lang_dir']);
+			}
+			$db->sql_freeresult($result);
+
+			// Get all extension groups.
 			$sql = 'SELECT group_id, group_name
 				FROM ' . EXTENSION_GROUPS_TABLE;
 			$result = $db->sql_query($sql);
 
+			$extension_groups = array();
 			while ($row = $db->sql_fetchrow($result))
 			{
-				if (isset($extension_groups[$row['group_name']]))
-				{
-					$sql_ary = array(
-						'group_name'	=> $extension_groups[$row['group_name']],
-					);
-					$sql = 'UPDATE ' . EXTENSION_GROUPS_TABLE . ' SET ' . $db->sql_build_array('UPDATE', $sql_ary) . '
-						WHERE group_id = ' . (int) $row['group_id'];
-					_sql($sql, $errored, $error_ary);
-				}
+				$extension_groups[$row['group_name']] = $row;
 			}
 			$db->sql_freeresult($result);
+
+			// Extension groups we're trying to adjust.
+			$default_extension_groups = array(
+				'ARCHIVES',
+				'DOCUMENTS',
+				'DOWNLOADABLE_FILES',
+				'FLASH_FILES',
+				'IMAGES',
+				'PLAIN_TEXT',
+				'QUICKTIME_MEDIA',
+				'REAL_MEDIA',
+				'WINDOWS_MEDIA',
+			);
+
+			// Loop trough all installed languages
+			foreach ($languages as $language)
+			{
+				$lang = array();
+
+				// Load acp/attachments language file.
+				if (file_exists($phpbb_root_path . 'install/update/new/language/' . $language . '/acp/attachments' . $phpEx))
+				{
+					include($phpbb_root_path . 'install/update/new/language/' . $language . '/acp/attachments' . $phpEx);
+				}
+				else if (file_exists($phpbb_root_path . 'language/' . $language . '/acp/attachments' . $phpEx))
+				{
+					include($phpbb_root_path . 'language/' . $language . '/acp/attachments' . $phpEx);
+				}
+				else
+				{
+					continue;
+				}
+
+				// For each default extension group ...
+				foreach ($default_extension_groups as $default_extension_group)
+				{
+					// ... with a language string defined ...
+					if (isset($lang['EXT_GROUP_' . $default_extension_group]))
+					{
+						// ... get the localise string.
+						$localised_name = $lang['EXT_GROUP_' . $default_extension_group];
+
+						// If there is a group with that localised name ...
+						if (isset($extension_groups[$localised_name]))
+						{
+							// ... update it to use a non-localised string.
+							$sql_ary = array(
+								'group_name'	=> $default_extension_group,
+							);
+
+							$sql = 'UPDATE ' . EXTENSION_GROUPS_TABLE . ' SET ' . $db->sql_build_array('UPDATE', $sql_ary) . '
+								WHERE group_id = ' . (int) $extension_groups[$localised_name]['group_id'];
+							_sql($sql, $errored, $error_ary);
+						}
+					}
+				}
+			}
 
 			// Install modules
 			$modules_to_install = array(
