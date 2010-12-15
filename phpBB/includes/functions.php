@@ -992,7 +992,7 @@ function phpbb_own_realpath($path)
 	// @todo If the file exists fine and open_basedir only has one path we should be able to prepend it
 	// because we must be inside that basedir, the question is where...
 	// @internal The slash in is_dir() gets around an open_basedir restriction
-	if (!@file_exists($resolved) || (!is_dir($resolved . '/') && !is_file($resolved)))
+	if (!@file_exists($resolved) || (!@is_dir($resolved . '/') && !is_file($resolved)))
 	{
 		return false;
 	}
@@ -2293,12 +2293,12 @@ function redirect($url, $return = false, $disable_cd_check = false)
 		// Relative uri
 		$pathinfo = pathinfo($url);
 
-		if (!$disable_cd_check && !file_exists($pathinfo['dirname']))
+		if (!$disable_cd_check && !file_exists($pathinfo['dirname'] . '/'))
 		{
 			$url = str_replace('../', '', $url);
 			$pathinfo = pathinfo($url);
 
-			if (!file_exists($pathinfo['dirname']))
+			if (!file_exists($pathinfo['dirname'] . '/'))
 			{
 				// fallback to "last known user page"
 				// at least this way we know the user does not leave the phpBB root
@@ -4592,5 +4592,3 @@ function phpbb_user_session_handler()
 
 	return;
 }
-
-?>

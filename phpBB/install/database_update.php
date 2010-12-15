@@ -8,7 +8,7 @@
 *
 */
 
-$updates_to_version = '3.0.8-dev';
+$updates_to_version = '3.0.9-dev';
 
 // Enter any version to update from to test updates. The version within the db will not be updated.
 $debug_from_version = false;
@@ -486,7 +486,7 @@ else
 
 	<p><?php echo ((isset($lang['INLINE_UPDATE_SUCCESSFUL'])) ? $lang['INLINE_UPDATE_SUCCESSFUL'] : 'The database update was successful. Now you need to continue the update process.'); ?></p>
 
-	<p><a href="<?php echo append_sid("{$phpbb_root_path}install/index.{$phpEx}", "mode=update&amp;sub=file_check&amp;lang=$language"); ?>" class="button1"><?php echo (isset($lang['CONTINUE_UPDATE_NOW'])) ? $lang['CONTINUE_UPDATE_NOW'] : 'Continue the update process now'; ?></a></p>
+	<p><a href="<?php echo append_sid("{$phpbb_root_path}install/index.{$phpEx}", "mode=update&amp;sub=file_check&amp;language=$language"); ?>" class="button1"><?php echo (isset($lang['CONTINUE_UPDATE_NOW'])) ? $lang['CONTINUE_UPDATE_NOW'] : 'Continue the update process now'; ?></a></p>
 
 <?php
 }
@@ -694,8 +694,7 @@ function _add_modules($modules_to_install)
 				FROM ' . MODULES_TABLE . "
 				WHERE module_class = '" . $db->sql_escape($module_data['class']) . "'
 					AND parent_id = {$parent_id}
-					AND left_id BETWEEN {$first_left_id} AND {$module_row['left_id']}
-				ORDER BY left_id";
+					AND left_id BETWEEN {$first_left_id} AND {$module_row['left_id']}";
 			$result = $db->sql_query($sql);
 			$steps = (int) $db->sql_fetchfield('num_modules');
 			$db->sql_freeresult($result);
@@ -924,6 +923,8 @@ function database_update_info()
 		'3.0.7'		=> array(),
 		// No changes from 3.0.7-PL1 to 3.0.8-RC1
 		'3.0.7-PL1'		=> array(),
+		// No changes from 3.0.8-RC1 to 3.0.8
+		'3.0.8-RC1'		=> array(),
 	);
 }
 
@@ -934,7 +935,7 @@ function database_update_info()
 *****************************************************************************/
 function change_database_data(&$no_updates, $version)
 {
-	global $db, $errored, $error_ary, $config, $phpbb_root_path, $phpEx, $user;
+	global $db, $errored, $error_ary, $config, $phpbb_root_path, $phpEx;
 
 	switch ($version)
 	{
@@ -1662,33 +1663,55 @@ function change_database_data(&$no_updates, $version)
 
 		// Changes from 3.0.7-PL1 to 3.0.8-RC1
 		case '3.0.7-PL1':
-			$user->add_lang('acp/attachments');
-			$extension_groups = array(
-				$user->lang['EXT_GROUP_ARCHIVES']			=> 'ARCHIVES',
-				$user->lang['EXT_GROUP_DOCUMENTS']			=> 'DOCUMENTS',
-				$user->lang['EXT_GROUP_DOWNLOADABLE_FILES']	=> 'DOWNLOADABLE_FILES',
-				$user->lang['EXT_GROUP_FLASH_FILES']		=> 'FLASH_FILES',
-				$user->lang['EXT_GROUP_IMAGES']				=> 'IMAGES',
-				$user->lang['EXT_GROUP_PLAIN_TEXT']			=> 'PLAIN_TEXT',
-				$user->lang['EXT_GROUP_QUICKTIME_MEDIA']	=> 'QUICKTIME_MEDIA',
-				$user->lang['EXT_GROUP_REAL_MEDIA']			=> 'REAL_MEDIA',
-				$user->lang['EXT_GROUP_WINDOWS_MEDIA']		=> 'WINDOWS_MEDIA',
-			);
-
-			$sql = 'SELECT group_id, group_name
-				FROM ' . EXTENSION_GROUPS_TABLE;
+			// Update file extension group names to use language strings.
+			$sql = 'SELECT lang_dir
+				FROM ' . LANG_TABLE;
 			$result = $db->sql_query($sql);
 
-			while ($row = $db->sql_fetchrow($result))
+			$extension_groups_updated = array();
+			while ($lang_dir = $db->sql_fetchfield('lang_dir'))
 			{
-				if (isset($extension_groups[$row['group_name']]))
+				$lang_dir = basename($lang_dir);
+
+				// The language strings we need are either in language/.../acp/attachments.php
+				// in the update package if we're updating to 3.0.8-RC1 or later,
+				// or they are in language/.../install.php when we're updating from 3.0.7-PL1 or earlier.
+				// On an already updated board, they can also already be in language/.../acp/attachments.php
+				// in the board root.
+				$lang_files = array(
+					"{$phpbb_root_path}install/update/new/language/$lang_dir/acp/attachments.$phpEx",
+					"{$phpbb_root_path}language/$lang_dir/install.$phpEx",
+					"{$phpbb_root_path}language/$lang_dir/acp/attachments.$phpEx",
+				);
+
+				foreach ($lang_files as $lang_file)
 				{
-					$sql_ary = array(
-						'group_name'	=> $extension_groups[$row['group_name']],
-					);
-					$sql = 'UPDATE ' . EXTENSION_GROUPS_TABLE . ' SET ' . $db->sql_build_array('UPDATE', $sql_ary) . '
-						WHERE group_id = ' . (int) $row['group_id'];
-					_sql($sql, $errored, $error_ary);
+					if (!file_exists($lang_file))
+					{
+						continue;
+					}
+
+					$lang = array();
+					include($lang_file);
+
+					foreach($lang as $lang_key => $lang_val)
+					{
+						if (isset($extension_groups_updated[$lang_key]) || strpos($lang_key, 'EXT_GROUP_') !== 0)
+						{
+							continue;
+						}
+
+						$sql_ary = array(
+							'group_name'	=> substr($lang_key, 10), // Strip off 'EXT_GROUP_'
+						);
+
+						$sql = 'UPDATE ' . EXTENSION_GROUPS_TABLE . '
+							SET ' . $db->sql_build_array('UPDATE', $sql_ary) . "
+							WHERE group_name = '" . $db->sql_escape($lang_val) . "'";
+						_sql($sql, $errored, $error_ary);
+
+						$extension_groups_updated[$lang_key] = true;
+					}
 				}
 			}
 			$db->sql_freeresult($result);
@@ -1716,55 +1739,66 @@ function change_database_data(&$no_updates, $version)
 			_sql($sql, $errored, $error_ary);
 
 			// add Bing Bot
-			$sql = 'SELECT group_id, group_colour
-				FROM ' . GROUPS_TABLE . "
-				WHERE group_name = 'BOTS'";
+			$bot_name = 'Bing [Bot]';
+			$bot_name_clean = utf8_clean_string($bot_name);
+
+			$sql = 'SELECT user_id
+				FROM ' . USERS_TABLE . "
+				WHERE username_clean = '" . $db->sql_escape($bot_name_clean) . "'";
 			$result = $db->sql_query($sql);
-			$group_row = $db->sql_fetchrow($result);
+			$bing_already_added = (bool) $db->sql_fetchfield('user_id');
 			$db->sql_freeresult($result);
 
-			if (!$group_row)
+			if (!$bing_already_added)
 			{
-				// default fallback, should never get here
-				$group_row['group_id'] = 6;
-				$group_row['group_colour'] = '9E8DA7';
+				$bot_agent = 'bingbot/';
+				$bot_ip = '';
+				$sql = 'SELECT group_id, group_colour
+					FROM ' . GROUPS_TABLE . "
+					WHERE group_name = 'BOTS'";
+				$result = $db->sql_query($sql);
+				$group_row = $db->sql_fetchrow($result);
+				$db->sql_freeresult($result);
+
+				if (!$group_row)
+				{
+					// default fallback, should never get here
+					$group_row['group_id'] = 6;
+					$group_row['group_colour'] = '9E8DA7';
+				}
+
+				if (!function_exists('user_add'))
+				{
+					include($phpbb_root_path . 'includes/functions_user.' . $phpEx);
+				}
+
+				$user_row = array(
+					'user_type'				=> USER_IGNORE,
+					'group_id'				=> $group_row['group_id'],
+					'username'				=> $bot_name,
+					'user_regdate'			=> time(),
+					'user_password'			=> '',
+					'user_colour'			=> $group_row['group_colour'],
+					'user_email'			=> '',
+					'user_lang'				=> $config['default_lang'],
+					'user_style'			=> $config['default_style'],
+					'user_timezone'			=> 0,
+					'user_dateformat'		=> $config['default_dateformat'],
+					'user_allow_massemail'	=> 0,
+				);
+
+				$user_id = user_add($user_row);
+
+				$sql = 'INSERT INTO ' . BOTS_TABLE . ' ' . $db->sql_build_array('INSERT', array(
+					'bot_active'	=> 1,
+					'bot_name'		=> (string) $bot_name,
+					'user_id'		=> (int) $user_id,
+					'bot_agent'		=> (string) $bot_agent,
+					'bot_ip'		=> (string) $bot_ip,
+				));
+
+				_sql($sql, $errored, $error_ary);
 			}
-
-			if (!function_exists('user_add'))
-			{
-				include($phpbb_root_path . 'includes/functions_user.' . $phpEx);
-			}
-
-			$bot_name = 'Bing [Bot]';
-			$bot_agent = 'bingbot/';
-			$bot_ip = '';
-
-			$user_row = array(
-				'user_type'				=> USER_IGNORE,
-				'group_id'				=> $group_row['group_id'],
-				'username'				=> $bot_name,
-				'user_regdate'			=> time(),
-				'user_password'			=> '',
-				'user_colour'			=> $group_row['group_colour'],
-				'user_email'			=> '',
-				'user_lang'				=> $config['default_lang'],
-				'user_style'			=> $config['default_style'],
-				'user_timezone'			=> 0,
-				'user_dateformat'		=> $config['default_dateformat'],
-				'user_allow_massemail'	=> 0,
-			);
-
-			$user_id = user_add($user_row);
-
-			$sql = 'INSERT INTO ' . BOTS_TABLE . ' ' . $db->sql_build_array('INSERT', array(
-				'bot_active'	=> 1,
-				'bot_name'		=> (string) $bot_name,
-				'user_id'		=> (int) $user_id,
-				'bot_agent'		=> (string) $bot_agent,
-				'bot_ip'		=> (string) $bot_ip,
-			));
-
-			_sql($sql, $errored, $error_ary);
 			// end Bing Bot addition
 
 			// Delete shadow topics pointing to not existing topics
@@ -1816,10 +1850,25 @@ function change_database_data(&$no_updates, $version)
 			// Unread posts search load switch
 			set_config('load_unreads_search', '1');
 
+			// Reduce queue interval to 60 seconds, email package size to 20
+			if ($config['queue_interval'] == 600)
+			{
+				set_config('queue_interval', '60');
+			}
+
+			if ($config['email_package_size'] == 50)
+			{
+				set_config('email_package_size', '20');
+			}
+
 			$no_updates = false;
 		break;
 
-		case '3.0.8-dev':
+		// No changes from 3.0.8-RC1 to 3.0.8
+		case '3.0.8-RC1':
+		break;
+
+		case '3.0.9-dev':
 			set_config('use_system_cron', 0);
 		break;
 	}
@@ -3766,5 +3815,3 @@ class updater_db_tools
 		return $this->_sql_run_sql($statements);
 	}
 }
-
-?>

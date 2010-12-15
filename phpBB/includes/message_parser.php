@@ -352,6 +352,15 @@ class bbcode_firstpass extends bbcode
 			return '[flash=' . $width . ',' . $height . ']' . $in . '[/flash]';
 		}
 
+		$in = str_replace(' ', '%20', $in);
+
+		// Make sure $in is a URL.
+		if (!preg_match('#^' . get_preg_expression('url') . '$#i', $in) &&
+			!preg_match('#^' . get_preg_expression('www_url') . '$#i', $in))
+		{
+			return '[flash=' . $width . ',' . $height . ']' . $in . '[/flash]';
+		}
+
 		// Apply the same size checks on flash files as on images
 		if ($config['max_' . $this->mode . '_img_height'] || $config['max_' . $this->mode . '_img_width'])
 		{
@@ -1678,5 +1687,3 @@ class parse_message extends bbcode_firstpass
 		$poll['poll_max_options'] = ($poll['poll_max_options'] < 1) ? 1 : (($poll['poll_max_options'] > $config['max_poll_options']) ? $config['max_poll_options'] : $poll['poll_max_options']);
 	}
 }
-
-?>

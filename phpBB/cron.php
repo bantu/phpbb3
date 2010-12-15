@@ -117,5 +117,3 @@ else
 		echo "Could not obtain cron lock.\n";
 	}
 }
-
-?>

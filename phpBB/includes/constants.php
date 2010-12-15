@@ -25,7 +25,7 @@ if (!defined('IN_PHPBB'))
 */
 
 // phpBB Version
-define('PHPBB_VERSION', '3.0.7-PL1');
+define('PHPBB_VERSION', '3.0.9-dev');
 
 // QA-related
 // define('PHPBB_QA', 1);
@@ -274,5 +274,3 @@ define('ZEBRA_TABLE',				$table_prefix . 'zebra');
 
 // Additional tables
 
-
-?>
