@@ -191,6 +191,66 @@ class session
 	}
 
 	/**
+	* Extracts IP addresses from a string such as
+	* REMOTE_ADDR or HTTP_X_FORWARDED_FOR
+	*
+	* @param string $ips		IP Addresses
+	* @param string $mode		What to do when an invalid address has been found
+	*							'continue'	skips invalid addresses and continues with the next address
+	*							'break'		discards all addresses after the invalid address
+	*							'return'	returns false immediately
+	*
+	* @return false|array
+	*
+	* @access private
+	*/
+	function extract_ip_addresses($ips, $mode = 'break')
+	{
+		// Replace commas with spaces
+		// Trim left and right spaces
+		// Squash duplicate spaces to a single space
+		// Explode to array
+		$ary = explode(' ', preg_replace('# {2,}#', ' ', trim(str_replace(',', ' ', $ips))));
+
+		$result = array();
+		foreach ($ary as $ip)
+		{
+			if (preg_match(get_preg_expression('ipv4'), $ip))
+			{
+				$result[] = $ip;
+			}
+			else if (preg_match(get_preg_expression('ipv6'), $ip))
+			{
+				// Quick check for IPv4-mapped address in IPv6
+				if (stripos($ip, '::ffff:') === 0)
+				{
+					$ipv4 = substr($ip, 7);
+
+					if (preg_match(get_preg_expression('ipv4'), $ipv4))
+					{
+						$ip = $ipv4;
+					}
+				}
+
+				$result[] = $ip;
+			}
+			else
+			{
+				if ($mode === 'break')
+				{
+					break;
+				}
+				else if ($mode === 'return')
+				{
+					return false;
+				}
+			}
+		}
+
+		return (empty($result)) ? false : $result;
+	}
+
+	/**
 	* Start session management
 	*
 	* This is where all session activity begins. We gather various pieces of
@@ -213,32 +273,23 @@ class session
 		$this->update_session_page	= $update_session_page;
 		$this->browser				= (!empty($_SERVER['HTTP_USER_AGENT'])) ? htmlspecialchars((string) $_SERVER['HTTP_USER_AGENT']) : '';
 		$this->referer				= (!empty($_SERVER['HTTP_REFERER'])) ? htmlspecialchars((string) $_SERVER['HTTP_REFERER']) : '';
-		$this->forwarded_for		= (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) ? htmlspecialchars((string) $_SERVER['HTTP_X_FORWARDED_FOR']) : '';
+		$this->forwarded_for		= '';
+		$this->forwarded_for_array	= array();
 
 		$this->host					= $this->extract_current_hostname();
 		$this->page					= $this->extract_current_page($phpbb_root_path);
 
 		// if the forwarded for header shall be checked we have to validate its contents
-		if ($config['forwarded_for_check'])
+		if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $config['forwarded_for_check'])
 		{
-			$this->forwarded_for = preg_replace('# {2,}#', ' ', str_replace(',', ' ', $this->forwarded_for));
-
-			// split the list of IPs
-			$ips = explode(' ', $this->forwarded_for);
-			foreach ($ips as $ip)
+			// Check whether X_FORWARDED_FOR is well formed and only contains IP addresses
+			$forwarded_for_array = $this->extract_ip_addresses($_SERVER['HTTP_X_FORWARDED_FOR'], 'return');
+		
+			if (!empty($forwarded_for_array))
 			{
-				// check IPv4 first, the IPv6 is hopefully only going to be used very seldomly
-				if (!empty($ip) && !preg_match(get_preg_expression('ipv4'), $ip) && !preg_match(get_preg_expression('ipv6'), $ip))
-				{
-					// contains invalid data, don't use the forwarded for header
-					$this->forwarded_for = '';
-					break;
-				}
+				$this->forwarded_for		= $_SERVER['HTTP_X_FORWARDED_FOR'];
+				$this->forwarded_for_array	= $forwarded_for_array;
 			}
-		}
-		else
-		{
-			$this->forwarded_for = '';
 		}
 
 		if (isset($_COOKIE[$config['cookie_name'] . '_sid']) || isset($_COOKIE[$config['cookie_name'] . '_u']))
@@ -267,37 +318,22 @@ class session
 
 		// Why no forwarded_for et al? Well, too easily spoofed. With the results of my recent requests
 		// it's pretty clear that in the majority of cases you'll at least be left with a proxy/cache ip.
-		$this->ip = (!empty($_SERVER['REMOTE_ADDR'])) ? htmlspecialchars((string) $_SERVER['REMOTE_ADDR']) : '';
-		$this->ip = preg_replace('# {2,}#', ' ', str_replace(',', ' ', $this->ip));
-
-		// split the list of IPs
-		$ips = explode(' ', $this->ip);
 
 		// Default IP if REMOTE_ADDR is invalid
 		$this->ip = '127.0.0.1';
+		$ips = array($this->ip);
 
-		foreach ($ips as $ip)
+		if (isset($_SERVER['REMOTE_ADDR']))
 		{
-			// check IPv4 first, the IPv6 is hopefully only going to be used very seldomly
-			if (!empty($ip) && !preg_match(get_preg_expression('ipv4'), $ip) && !preg_match(get_preg_expression('ipv6'), $ip))
+			$remote_ip_addresses = $this->extract_ip_addresses($_SERVER['REMOTE_ADDR'], 'break');
+
+			if (!empty($remote_ip_addresses))
 			{
-				// Just break
-				break;
+				$ips = $remote_ip_addresses;
+
+				// Use the last in chain
+				$this->ip = $ips[sizeof($ips) - 1];
 			}
-
-			// Quick check for IPv4-mapped address in IPv6
-			if (stripos($ip, '::ffff:') === 0)
-			{
-				$ipv4 = substr($ip, 7);
-
-				if (preg_match(get_preg_expression('ipv4'), $ipv4))
-				{
-					$ip = $ipv4;
-				}
-			}
-
-			// Use the last in chain
-			$this->ip = $ip;
 		}
 
 		$this->load = false;
