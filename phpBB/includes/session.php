@@ -286,7 +286,7 @@ class session
 		$this->page					= $this->extract_current_page($phpbb_root_path);
 
 		// if the forwarded for header shall be checked we have to validate its contents
-		if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $config['forwarded_for_check'])
+		if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $config['forwarded_for_check'] && is_string($_SERVER['HTTP_X_FORWARDED_FOR']) && strlen($_SERVER['HTTP_X_FORWARDED_FOR']) <= 255)
 		{
 			// Check whether X_FORWARDED_FOR is well formed and only contains IP addresses
 			$forwarded_for_array = $this->extract_ip_addresses($_SERVER['HTTP_X_FORWARDED_FOR'], 'return');
