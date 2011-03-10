@@ -206,6 +206,12 @@ class session
 	*/
 	function extract_ip_addresses($ips, $mode = 'break')
 	{
+		// Shortcut logic for checking whether it's a single IPv4 address
+		if (strpos($ips, ' ') === false && strpos($ips, ',') === false && preg_match(get_preg_expression('ipv4'), $ips))
+		{
+			return array($ips);
+		}
+
 		// Replace commas with spaces
 		// Trim left and right spaces
 		// Squash duplicate spaces to a single space
