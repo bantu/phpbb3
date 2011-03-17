@@ -191,6 +191,32 @@ class session
 	}
 
 	/**
+	* Extracts IP addresses from HTTP_X_FORWARDED_FOR
+	*
+	* @return array				Array of Internet Protocol Addresses
+	*
+	* @access private
+	*/
+	function extract_forwarded_for_ips()
+	{
+		// Reject any HTTP_X_FORWARDED_FORs longer than 255 characters.
+		// It makes no sense to iterate over all the IP addresses
+		// when a huge string is sent on purpose.
+		if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && strlen($_SERVER['HTTP_X_FORWARDED_FOR']) <= 255)
+		{
+			// Check whether X_FORWARDED_FOR is well formed and only contains IP addresses
+			$ip_array = $this->extract_ip_addresses($_SERVER['HTTP_X_FORWARDED_FOR'], 'return');
+
+			if (!empty($ip_array))
+			{
+				return $ip_array;
+			}
+		}
+
+		return array();
+	}
+
+	/**
 	* Extracts IP addresses from a string such as
 	* REMOTE_ADDR or HTTP_X_FORWARDED_FOR
 	*
@@ -279,23 +305,18 @@ class session
 		$this->update_session_page	= $update_session_page;
 		$this->browser				= (!empty($_SERVER['HTTP_USER_AGENT'])) ? htmlspecialchars((string) $_SERVER['HTTP_USER_AGENT']) : '';
 		$this->referer				= (!empty($_SERVER['HTTP_REFERER'])) ? htmlspecialchars((string) $_SERVER['HTTP_REFERER']) : '';
-		$this->forwarded_for		= '';
-		$this->forwarded_for_array	= array();
-
 		$this->host					= $this->extract_current_hostname();
 		$this->page					= $this->extract_current_page($phpbb_root_path);
 
-		// if the forwarded for header shall be checked we have to validate its contents
-		if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && $config['forwarded_for_check'] && is_string($_SERVER['HTTP_X_FORWARDED_FOR']) && strlen($_SERVER['HTTP_X_FORWARDED_FOR']) <= 255)
+		if ($config['forwarded_for_check'])
 		{
-			// Check whether X_FORWARDED_FOR is well formed and only contains IP addresses
-			$forwarded_for_array = $this->extract_ip_addresses($_SERVER['HTTP_X_FORWARDED_FOR'], 'return');
-		
-			if (!empty($forwarded_for_array))
-			{
-				$this->forwarded_for		= $_SERVER['HTTP_X_FORWARDED_FOR'];
-				$this->forwarded_for_array	= $forwarded_for_array;
-			}
+			$this->forwarded_for_array	= $this->extract_forwarded_for_ips();
+			$this->forwarded_for		= implode(' ', $this->forwarded_for_array);
+		}
+		else
+		{
+			$this->forwarded_for_array	= array();
+			$this->forwarded_for		= '';
 		}
 
 		if (isset($_COOKIE[$config['cookie_name'] . '_sid']) || isset($_COOKIE[$config['cookie_name'] . '_u']))
