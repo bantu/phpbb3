@@ -217,6 +217,29 @@ class session
 	}
 
 	/**
+	* Extracts IP addresses from REMOTE_ADDR
+	*
+	* @return array				Array of Internet Protocol Addresses
+	*							array('127.0.0.1') in case REMOTE_ADDR is empty.
+	*
+	* @access private
+	*/
+	function extract_remote_addresses()
+	{
+		if (isset($_SERVER['REMOTE_ADDR']))
+		{
+			$ip_array = $this->extract_ip_addresses($_SERVER['REMOTE_ADDR'], 'break');
+
+			if (!empty($ip_array))
+			{
+				return $ip_array;
+			}
+		}
+
+		return array('127.0.0.1');
+	}
+
+	/**
 	* Extracts IP addresses from a string such as
 	* REMOTE_ADDR or HTTP_X_FORWARDED_FOR
 	*
@@ -308,6 +331,12 @@ class session
 		$this->host					= $this->extract_current_hostname();
 		$this->page					= $this->extract_current_page($phpbb_root_path);
 
+		// Get webserver IP address(es)
+		$ips = $this->extract_remote_addresses();
+
+		// Use the last in chain as main address
+		$this->ip = $ips[sizeof($ips) - 1];
+
 		if ($config['forwarded_for_check'])
 		{
 			$this->forwarded_for_array	= $this->extract_forwarded_for_ips();
@@ -342,26 +371,6 @@ class session
 		}
 
 		$_EXTRA_URL = array();
-
-		// Why no forwarded_for et al? Well, too easily spoofed. With the results of my recent requests
-		// it's pretty clear that in the majority of cases you'll at least be left with a proxy/cache ip.
-
-		// Default IP if REMOTE_ADDR is invalid
-		$this->ip = '127.0.0.1';
-		$ips = array($this->ip);
-
-		if (isset($_SERVER['REMOTE_ADDR']))
-		{
-			$remote_ip_addresses = $this->extract_ip_addresses($_SERVER['REMOTE_ADDR'], 'break');
-
-			if (!empty($remote_ip_addresses))
-			{
-				$ips = $remote_ip_addresses;
-
-				// Use the last in chain
-				$this->ip = $ips[sizeof($ips) - 1];
-			}
-		}
 
 		$this->load = false;
 
