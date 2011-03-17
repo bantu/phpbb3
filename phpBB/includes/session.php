@@ -27,6 +27,7 @@ class session
 	var $data = array();
 	var $browser = '';
 	var $forwarded_for = '';
+	var $forwarded_for_array = array();
 	var $host = '';
 	var $session_id = '';
 	var $ip = '';
@@ -341,11 +342,6 @@ class session
 		{
 			$this->forwarded_for_array	= $this->extract_forwarded_for_ips();
 			$this->forwarded_for		= implode(' ', $this->forwarded_for_array);
-		}
-		else
-		{
-			$this->forwarded_for_array	= array();
-			$this->forwarded_for		= '';
 		}
 
 		if (isset($_COOKIE[$config['cookie_name'] . '_sid']) || isset($_COOKIE[$config['cookie_name'] . '_u']))
