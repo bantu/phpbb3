@@ -717,7 +717,7 @@ class session
 			}
 			else
 			{
-				$ips = explode(' ', $this->forwarded_for);
+				$ips = $this->forwarded_for_array;
 				$ips[] = $this->ip;
 				$this->check_ban($this->data['user_id'], $ips);
 			}
