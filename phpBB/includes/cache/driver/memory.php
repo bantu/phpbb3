@@ -34,7 +34,7 @@ class phpbb_cache_driver_memory extends phpbb_cache_driver_base
 	/**
 	* Set cache path
 	*/
-	function __construct()
+	function __construct(array $param = array())
 	{
 		global $phpbb_root_path, $dbname, $table_prefix;
 

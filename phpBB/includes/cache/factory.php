@@ -22,16 +22,18 @@ if (!defined('IN_PHPBB'))
 class phpbb_cache_factory
 {
 	private $acm_type;
+	private $acm_param;
 
-	public function __construct($acm_type)
+	public function __construct($acm_type, array $acm_param = array())
 	{
 		$this->acm_type = $acm_type;
+		$this->acm_param = $acm_param;
 	}
 
 	public function get_driver()
 	{
 		$class_name = 'phpbb_cache_driver_' . $this->acm_type;
-		return new $class_name();
+		return new $class_name($this->acm_param);
 	}
 
 	public function get_service()

@@ -30,13 +30,23 @@ class phpbb_cache_driver_file extends phpbb_cache_driver_base
 	var $sql_row_pointer = array();
 	var $cache_dir = '';
 
+	function __construct(array $param = array())
+	{
+		$param = array_merge(array(
+			'cache_path' => 'cache/',
+		), $param);
+	
+		$this->set_cache_path($param['cache_path']);
+	}
+
 	/**
 	* Set cache path
 	*/
-	function __construct($cache_dir = null)
+	public function set_cache_path($path)
 	{
 		global $phpbb_root_path;
-		$this->cache_dir = !is_null($cache_dir) ? $cache_dir : $phpbb_root_path . 'cache/';
+
+		$this->cache_dir = is_absolute($path) ? $path : $phpbb_root_path . $path;
 	}
 
 	/**

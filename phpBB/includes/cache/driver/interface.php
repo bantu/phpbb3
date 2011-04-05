@@ -23,6 +23,11 @@ if (!defined('IN_PHPBB'))
 interface phpbb_cache_driver_interface
 {
 	/**
+	* Constructor
+	*/
+	public function __construct(array $param = array());
+
+	/**
 	* Load global cache
 	*/
 	public function load();

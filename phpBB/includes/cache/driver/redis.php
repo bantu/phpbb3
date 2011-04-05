@@ -45,10 +45,10 @@ class phpbb_cache_driver_redis extends phpbb_cache_driver_memory
 
 	var $redis;
 
-	function __construct()
+	function __construct(array $param = array())
 	{
 		// Call the parent constructor
-		parent::__construct();
+		parent::__construct($param);
 
 		$this->redis = new Redis();
 		foreach (explode(',', PHPBB_ACM_REDIS) as $server)

@@ -48,10 +48,10 @@ class phpbb_cache_driver_memcache extends phpbb_cache_driver_memory
 	var $memcache;
 	var $flags = 0;
 
-	function __construct()
+	function __construct(array $param = array())
 	{
 		// Call the parent constructor
-		parent::__construct();
+		parent::__construct($param);
 
 		$this->memcache = new Memcache;
 		foreach(explode(',', PHPBB_ACM_MEMCACHE) as $u)
