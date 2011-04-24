@@ -93,13 +93,13 @@ class bbcode
 						${$type}['replace'][] = $replace;
 					}
 
-					if (isset($str) && !empty($str['search']))
+					if (!empty($str['search']))
 					{
 						$message = str_replace($str['search'], $str['replace'], $message);
 						$str = array('search' => array(), 'replace' => array());
 					}
 
-					if (isset($preg) && !empty($preg['search']))
+					if (!empty($preg['search']))
 					{
 						// we need to turn the entities back into their original form to allow the
 						// search patterns to work properly
@@ -113,7 +113,7 @@ class bbcode
 						$preg = array('search' => array(), 'replace' => array());
 					}
 
-					if (isset($callback) && !empty($callback['search']))
+					if (!empty($callback['search']))
 					{
 						// we need to turn the entities back into their original form to allow the
 						// search patterns to work properly
