@@ -18,7 +18,7 @@ class phpbb_utf_normalizer_test extends phpbb_test_case
 
 	static public function setUpBeforeClass()
 	{
-		self::$data_dir = dirname(__file__) . '/../tmp';
+		self::$data_dir = self::get_temp_path();
 		self::download('http://www.unicode.org/Public/UNIDATA/NormalizationTest.txt', self::$data_dir);
 		self::download('http://www.unicode.org/Public/UNIDATA/UnicodeData.txt', self::$data_dir);
 	}

@@ -40,4 +40,14 @@ class phpbb_test_case extends PHPUnit_Framework_TestCase
 	{
 		$this->get_test_case_helpers()->setExpectedTriggerError($errno, $message);
 	}
+
+	static public function get_temp_path()
+	{
+		if (isset($_SERVER['PHPBB_TEST_TEMP_PATH']))
+		{
+			return $_SERVER['PHPBB_TEST_TEMP_PATH'];
+		}
+
+		return dirname(__FILE__) . '/../tmp';
+	}
 }

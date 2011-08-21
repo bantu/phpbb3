@@ -15,7 +15,7 @@ class phpbb_cache_test extends phpbb_test_case
 
 	public function __construct()
 	{
-		$this->cache_dir = dirname(__FILE__) . '/../tmp/cache/';
+		$this->cache_dir = self::get_temp_path() . '/cache';
 	}
 
 	protected function setUp()
