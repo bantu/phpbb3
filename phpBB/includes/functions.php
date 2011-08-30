@@ -4826,24 +4826,6 @@ function phpbb_user_session_handler()
 }
 
 /**
-* Master wrapper for ini_get() PHP function
-*
-* This function calls phpBB ini_get() wrapper functions
-* depending on required output type.
-* Available types: 'bool', 'int', 'string' (default)
-*
-* @param string	$ini_param		PHP ini parameter to check
-* @param string	$type			Type of return value
-* @return mixed					False if ini parameter does not exist,
-*								value of requested type otherwise.
-*/
-function phpbb_ini_get($ini_param, $type = 'string')
-{
-	$function = "phpbb_ini_get_{$type}";
-	return $function($ini_param);
-}
-
-/**
 * Wrapper for ini_get() PHP function
 *
 * This function calls the PHP native ini_get() and handle its output
