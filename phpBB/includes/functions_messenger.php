@@ -616,12 +616,21 @@ class queue
 	var $eol = "\n";
 
 	/**
+	* A lock preventing multiple processes from working with
+	* the queue at the same time.
+	*
+	* @var phpbb_lock_db
+	*/
+	protected $lock;
+
+	/**
 	* constructor
 	*/
-	function queue()
+	function queue(phpbb_lock_db $lock)
 	{
 		global $phpEx, $phpbb_root_path;
 
+		$this->lock = $lock;
 		$this->data = array();
 		$this->cache_file = "{$phpbb_root_path}cache/queue.$phpEx";
 
@@ -714,13 +723,13 @@ class queue
 	{
 		global $db, $config, $phpEx, $phpbb_root_path, $user;
 
-		$lock_fp = $this->lock();
+		$this->lock->acquire();
 
 		set_config('last_queue_run', time(), true);
 
 		if (!file_exists($this->cache_file) || filemtime($this->cache_file) > time() - $config['queue_interval'])
 		{
-			$this->unlock($lock_fp);
+			$this->lock->release();
 			return;
 		}
 
@@ -787,7 +796,7 @@ class queue
 				break;
 
 				default:
-					$this->unlock($lock_fp);
+					$this->lock->release();
 					return;
 			}
 
@@ -863,7 +872,7 @@ class queue
 			}
 		}
 
-		$this->unlock($lock_fp);
+		$this->lock->release();
 	}
 
 	/**
@@ -876,7 +885,7 @@ class queue
 			return;
 		}
 
-		$lock_fp = $this->lock();
+		$this->lock->acquire();
 
 		if (file_exists($this->cache_file))
 		{
@@ -903,7 +912,7 @@ class queue
 			phpbb_chmod($this->cache_file, CHMOD_READ | CHMOD_WRITE);
 		}
 
-		$this->unlock($lock_fp);
+		$this->lock->release();
 	}
 }
 

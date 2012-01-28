@@ -29,12 +29,12 @@ class phpbb_cron_task_core_queue extends phpbb_cron_task_base
 	*/
 	public function run()
 	{
-		global $phpbb_root_path, $phpEx;
+		global $phpbb_root_path, $phpEx, $config, $db;
 		if (!class_exists('queue'))
 		{
 			include($phpbb_root_path . 'includes/functions_messenger.' . $phpEx);
 		}
-		$queue = new queue();
+		$queue = new queue(new phpbb_lock_db('queue_lock', $config, $db));
 		$queue->process();
 	}
 
