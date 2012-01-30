@@ -609,6 +609,13 @@ class messenger
 */
 class queue
 {
+	/**
+	* Default name of the config variable used by $lock.
+	*
+	* @var string
+	*/
+	const LOCK_CONFIG_NAME = 'queue_lock';
+
 	var $data = array();
 	var $queue_data = array();
 	var $package_size = 0;

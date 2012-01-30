@@ -34,7 +34,7 @@ class phpbb_cron_task_core_queue extends phpbb_cron_task_base
 		{
 			include($phpbb_root_path . 'includes/functions_messenger.' . $phpEx);
 		}
-		$queue = new queue(new phpbb_lock_db('queue_lock', $config, $db));
+		$queue = new queue(new phpbb_lock_db(queue::LOCK_CONFIG_NAME, $config, $db));
 		$queue->process();
 	}
 
