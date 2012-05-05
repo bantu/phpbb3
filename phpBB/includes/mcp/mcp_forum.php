@@ -151,7 +151,12 @@ function mcp_forum_view($id, $mode, $action, $forum_info)
 
 	$sql = 'SELECT t.topic_id
 		FROM ' . TOPICS_TABLE . ' t
-		WHERE t.forum_id = ' . $forum_id . '
+		WHERE (
+				(t.topic_type <> ' . POST_NORMAL . ' AND t.topic_type <> ' . POST_STICKY . ') OR
+				t.topic_poster = ' . $user->data['user_id'] . ' OR 1='. (($auth->acl_get('f_read_other', $forum_id))? '1' : '0') . '
+			)
+			AND
+			t.forum_id = ' . $forum_id . '
 			' . (($auth->acl_get('m_approve', $forum_id)) ? '' : 'AND t.topic_approved = 1') . "
 			$limit_time_sql
 		ORDER BY t.topic_type DESC, $sort_order_sql";
