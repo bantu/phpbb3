@@ -1284,7 +1284,7 @@ function user_notification($mode, $subject, $topic_title, $forum_name, $forum_id
 		{
 			$notify_rows[$user_id]['allowed'] = true;
 			// he may be allowed to read but we want to make sure he is allowed to read it all
-			if (!isset($forum_ary['f_read_other'][$index]) || !$forum_ary['f_read_other'][$index])
+			if (!isset($permissions['f_read_other'][$index]) || !$permissions['f_read_other'][$index])
 			{
 				$cannot_read_topic[$user_id] = $user_id;
 			}
