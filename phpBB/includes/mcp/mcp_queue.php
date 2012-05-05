@@ -312,7 +312,7 @@ class mcp_queue
 						FROM ' . POSTS_TABLE . ' p, ' . TOPICS_TABLE . ' t' . (($sort_order_sql[0] == 'u') ? ', ' . USERS_TABLE . ' u' : '') . '
 						WHERE ' . $db->sql_in_set('p.forum_id', $forum_list) . '
 							AND (t.topic_poster = ' . $user->data['user_id'] . '
-								OR  ' . $db->sql_in_set('f.forum_id', get_forum_list('f_read_other', true, true)) . ')
+								OR  ' . $db->sql_in_set('t.forum_id', get_forum_list('f_read_other', true, true)) . ')
 							AND p.post_approved = 0
 							' . (($sort_order_sql[0] == 'u') ? 'AND u.user_id = p.poster_id' : '') . '
 							' . (($topic_id) ? 'AND p.topic_id = ' . $topic_id : '') . "
@@ -337,7 +337,7 @@ class mcp_queue
 							FROM ' . POSTS_TABLE . ' p, ' . TOPICS_TABLE . ' t, ' . USERS_TABLE . ' u
 							WHERE ' . $db->sql_in_set('p.post_id', $post_ids) . '
 								AND (t.topic_poster = ' . $user->data['user_id'] . '
-									OR  ' . $db->sql_in_set('f.forum_id', get_forum_list('f_read_other', true, true)) . ')
+									OR  ' . $db->sql_in_set('t.forum_id', get_forum_list('f_read_other', true, true)) . ')
 								AND t.topic_id = p.topic_id
 								AND u.user_id = p.poster_id
 							ORDER BY ' . $sort_order_sql;
@@ -368,7 +368,7 @@ class mcp_queue
 						FROM ' . TOPICS_TABLE . ' t
 						WHERE ' . $db->sql_in_set('forum_id', $forum_list) . '
 							AND (t.topic_poster = ' . $user->data['user_id'] . '
-								OR  ' . $db->sql_in_set('f.forum_id', $forum_all_readable_list) . ")
+								OR  ' . $db->sql_in_set('t.forum_id', get_forum_list('f_read_other', true, true), false, true) . ")
 							AND topic_approved = 0
 							$limit_time_sql
 						ORDER BY $sort_order_sql";
