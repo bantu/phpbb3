@@ -759,7 +759,7 @@ switch ($mode)
 		else if ($topic_id)
 		{
 			// Send topic heads-up to email address
-			$sql = 'SELECT forum_id, topic_title
+			$sql = 'SELECT forum_id, topic_title, topic_poster
 				FROM ' . TOPICS_TABLE . "
 				WHERE topic_id = $topic_id";
 			$result = $db->sql_query($sql);
@@ -777,7 +777,10 @@ switch ($mode)
 				{
 					trigger_error('SORRY_AUTH_READ');
 				}
-
+				if($row['topic_poster'] != $user->data['user_id'] && !$auth->acl_get('f_read_other', $forum_id))
+				{
+					trigger_error('SORRY_AUTH_READ_THREAD');
+				}
 				if (!$auth->acl_get('f_email', $row['forum_id']))
 				{
 					trigger_error('NO_EMAIL');
