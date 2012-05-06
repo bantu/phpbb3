@@ -1034,8 +1034,8 @@ class phpbb_feed_topic extends phpbb_feed_post_base
 		// Make sure we can read this forum
 		// If I can read, make sure that I can read all topics or I started this topic
 		if (!$auth->acl_get('f_read', $this->forum_id) ||
-			(	!$auth->acl_get('f_read_other', $this->forum_id) &&
-				$user->data['user_id'] != $this->topic_data['topic_poster']
+			(	$user->data['user_id'] != $this->topic_data['topic_poster'] &&
+				!$auth->acl_get('f_read_other', $this->forum_id)
 			))
 		{
 			trigger_error('SORRY_AUTH_READ');
