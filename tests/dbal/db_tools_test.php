@@ -207,11 +207,15 @@ class phpbb_dbal_db_tools_test extends phpbb_database_test_case
 			'c_vchar_size' => '2',
 		));
 
-		$sql = 'INSERT INTO prefix_table_name ' . $this->db->sql_build_array('INSERT', $row1);
+		$sql = 'INSERT INTO prefix_table_name ' . $this->db->sql_build_array('INSERT', array_merge($row1, array(
+			'c_varbinary' => $this->db->sql_escape_binary($row1['c_varbinary']),
+		)));
 		$result = $this->db->sql_query($sql);
 		$id1 = $this->db->sql_nextid();
 
-		$sql = 'INSERT INTO prefix_table_name ' . $this->db->sql_build_array('INSERT', $row2);
+		$sql = 'INSERT INTO prefix_table_name ' . $this->db->sql_build_array('INSERT', array_merge($row2, array(
+			'c_varbinary' => $this->db->sql_escape_binary($row2['c_varbinary']),
+		)));
 		$result = $this->db->sql_query($sql);
 		$id2 = $this->db->sql_nextid();
 
@@ -221,6 +225,7 @@ class phpbb_dbal_db_tools_test extends phpbb_database_test_case
 			FROM prefix_table_name WHERE c_id = $id1";
 		$result = $this->db->sql_query($sql);
 		$row_actual = $this->db->sql_fetchrow($result);
+		$row_actual['c_varbinary'] = $this->db->sql_unescape_binary($row_actual['c_varbinary']);
 		$this->db->sql_freeresult($result);
 
 		$row1['c_id'] = $id1;
@@ -230,6 +235,7 @@ class phpbb_dbal_db_tools_test extends phpbb_database_test_case
 			FROM prefix_table_name WHERE c_id = $id2";
 		$result = $this->db->sql_query($sql);
 		$row_actual = $this->db->sql_fetchrow($result);
+		$row_actual['c_varbinary'] = $this->db->sql_unescape_binary($row_actual['c_varbinary']);
 		$this->db->sql_freeresult($result);
 
 		$row2['c_id'] = $id2;
