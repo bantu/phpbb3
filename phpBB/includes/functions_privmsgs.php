@@ -1101,61 +1101,20 @@ function phpbb_delete_user_pms($user_id)
 		return false;
 	}
 
-	// Get PM Information for later deleting
-	// The two queries where split, so we can use our indexes
-	$undelivered_msg = $undelivered_user = $delete_ids = array();
+	phpbb_delete_undelivered_pms($user_id);
 
-	// Part 1: get PMs the user received
-	$sql = 'SELECT msg_id, user_id, author_id, folder_id
+	// Get PMs the user received
+	$sql = 'SELECT msg_id, user_id
 		FROM ' . PRIVMSGS_TO_TABLE . '
 		WHERE user_id = ' . $user_id;
 	$result = $db->sql_query($sql);
 
+	$delete_ids = array();
 	while ($row = $db->sql_fetchrow($result))
 	{
 		$msg_id = (int) $row['msg_id'];
+
 		$delete_ids[$msg_id] = $msg_id;
-
-		if ($row['author_id'] == $user_id && $row['folder_id'] == PRIVMSGS_NO_BOX)
-		{
-			// Undelivered messages
-			$undelivered_msg[] = $msg_id;
-
-			if (isset($undelivered_user[$row['user_id']]))
-			{
-				++$undelivered_user[$row['user_id']];
-			}
-			else
-			{
-				$undelivered_user[$row['user_id']] = 1;
-			}
-		}
-	}
-	$db->sql_freeresult($result);
-
-	// Part 2: get PMs the user sent, but has yet to be received
-	$sql = 'SELECT msg_id, user_id
-		FROM ' . PRIVMSGS_TO_TABLE . '
-		WHERE author_id = ' . $user_id . '
-			AND folder_id = ' . PRIVMSGS_NO_BOX;
-	$result = $db->sql_query($sql);
-
-	while ($row = $db->sql_fetchrow($result))
-	{
-		$msg_id = (int) $row['msg_id'];
-		$delete_ids[$msg_id] = $msg_id;
-
-		// Undelivered messages
-		$undelivered_msg[] = $msg_id;
-
-		if (isset($undelivered_user[$row['user_id']]))
-		{
-			++$undelivered_user[$row['user_id']];
-		}
-		else
-		{
-			$undelivered_user[$row['user_id']] = 1;
-		}
 	}
 	$db->sql_freeresult($result);
 
@@ -1165,34 +1124,6 @@ function phpbb_delete_user_pms($user_id)
 	}
 
 	$db->sql_transaction('begin');
-
-	if (sizeof($undelivered_msg))
-	{
-		$sql = 'DELETE FROM ' . PRIVMSGS_TABLE . '
-			WHERE ' . $db->sql_in_set('msg_id', $undelivered_msg);
-		$db->sql_query($sql);
-	}
-
-	// Reset the user's pm count to 0
-	if (isset($undelivered_user[$user_id]))
-	{
-		$sql = 'UPDATE ' . USERS_TABLE . '
-			SET user_new_privmsg = 0,
-				user_unread_privmsg = 0
-			WHERE user_id = ' . $user_id;
-		$db->sql_query($sql);
-
-		unset($undelivered_user[$user_id]);
-	}
-
-	foreach ($undelivered_user as $_user_id => $count)
-	{
-		$sql = 'UPDATE ' . USERS_TABLE . '
-			SET user_new_privmsg = user_new_privmsg - ' . $count . ',
-				user_unread_privmsg = user_unread_privmsg - ' . $count . '
-			WHERE user_id = ' . $_user_id;
-		$db->sql_query($sql);
-	}
 
 	// Delete private message data
 	$sql = 'DELETE FROM ' . PRIVMSGS_TO_TABLE . "
@@ -1212,20 +1143,7 @@ function phpbb_delete_user_pms($user_id)
 	}
 	$db->sql_freeresult($result);
 
-	if (!empty($delete_ids))
-	{
-		// Check if there are any attachments we need to remove
-		if (!function_exists('delete_attachments'))
-		{
-			include($phpbb_root_path . 'includes/functions_admin.' . $phpEx);
-		}
-
-		delete_attachments('message', $delete_ids, false);
-
-		$sql = 'DELETE FROM ' . PRIVMSGS_TABLE . '
-			WHERE ' . $db->sql_in_set('msg_id', $delete_ids);
-		$db->sql_query($sql);
-	}
+	phpbb_delete_pms($delete_ids);
 
 	// Set the remaining author id to anonymous
 	// This way users are still able to read messages from users being removed
@@ -1242,6 +1160,106 @@ function phpbb_delete_user_pms($user_id)
 	$db->sql_transaction('commit');
 
 	return true;
+}
+
+/**
+* Deletes private messages $user_id sent but have not been read yet.
+*
+* @param	int		$user_id	ID of the user whose private messages we want to delete
+*
+* @return	boolean		False if there were no pms found, true otherwise.
+*/
+function phpbb_delete_undelivered_pms($user_id)
+{
+	global $db;
+
+	$user_id = (int) $user_id;
+
+	// Message ids to be deleted
+	$message_ids = array();
+
+	// Per user_id counter of incoming messages deleted
+	$user_counters = array();
+
+	// Get PMs the user sent, but have yet to be received
+	$sql = 'SELECT msg_id, user_id
+		FROM ' . PRIVMSGS_TO_TABLE . '
+		WHERE author_id = ' . $user_id . '
+			AND folder_id = ' . PRIVMSGS_NO_BOX;
+	$result = $db->sql_query($sql);
+
+	while ($row = $db->sql_fetchrow($result))
+	{
+		$msg_id = (int) $row['msg_id'];
+
+		$message_ids[$msg_id] = $msg_id;
+
+		if (isset($user_counters[$row['user_id']]))
+		{
+			++$user_counters[$row['user_id']];
+		}
+		else
+		{
+			$user_counters[$row['user_id']] = 1;
+		}
+	}
+	$db->sql_freeresult($result);
+
+	if (empty($message_ids))
+	{
+		return false;
+	}
+
+	$db->sql_transaction('begin');
+
+	phpbb_delete_pms($message_ids);
+
+	// Reset the user's pm count to 0
+	if (isset($undelivered_user[$user_id]))
+	{
+		$sql = 'UPDATE ' . USERS_TABLE . '
+			SET user_new_privmsg = 0,
+				user_unread_privmsg = 0
+			WHERE user_id = ' . $user_id;
+		$db->sql_query($sql);
+
+		unset($undelivered_user[$user_id]);
+	}
+
+	foreach ($undelivered_user as $receiver_id => $count)
+	{
+		$sql = 'UPDATE ' . USERS_TABLE . '
+			SET user_new_privmsg = user_new_privmsg - ' . $count . ',
+				user_unread_privmsg = user_unread_privmsg - ' . $count . '
+			WHERE user_id = ' . $receiver_id;
+		$db->sql_query($sql);
+	}
+
+	$db->sql_transaction('commit');
+}
+
+/**
+* Deletes $msg_ids from the private messages table as well as attachments.
+*
+* @param int $msg_ids		Private message ids to be deleted.
+*
+* @return null
+*/
+function phpbb_delete_pms($msg_ids)
+{
+	global $db, $phpbb_root_path, $phpEx;
+
+	// Check if there are any attachments we need to remove
+	if (!function_exists('delete_attachments'))
+	{
+		include($phpbb_root_path . 'includes/functions_admin.' . $phpEx);
+	}
+
+	delete_attachments('message', $msg_ids, false);
+
+	$sql = 'DELETE FROM ' . PRIVMSGS_TABLE . '
+		WHERE ' . $db->sql_in_set('msg_id', $msg_ids);
+	$db->sql_query($sql);
 }
 
 /**
