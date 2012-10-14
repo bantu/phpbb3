@@ -3217,8 +3217,9 @@ function login_forum_box($forum_data)
 
 	$template->assign_vars(array(
 		'S_LOGIN_ACTION'		=> build_url(array('f')),
-		'S_HIDDEN_FIELDS'		=> build_hidden_fields(array('f' => $forum_data['forum_id'])))
-	);
+		'S_HIDDEN_FIELDS'		=> build_hidden_fields(array('f' => $forum_data['forum_id'])),
+		'FORUM_NAME'			=> $forum_data['forum_name'],
+	));
 
 	$template->set_filenames(array(
 		'body' => 'login_forum.html')
