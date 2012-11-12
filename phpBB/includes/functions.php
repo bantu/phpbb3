@@ -1312,11 +1312,20 @@ function tz_select($default = '', $truncate = false)
 function phpbb_update_rows_avoiding_duplicates($db, $table, $column, $from_values, $to_value)
 {
 	$db->sql_return_on_error(true);
-	$condition = $db->sql_in_set($column, $from_values);
-	$db->sql_query('UPDATE ' . $table . ' SET ' . $column . ' = ' . (int) $to_value. ' WHERE ' . $condition);
+
+	foreach ($from_values as $from_value)
+	{
+		$sql = "UPDATE $table
+			SET $column = " . (int) $to_value. "
+			WHERE $column = '" . $db->sql_escape($from_value) . "'";
+		$db->sql_query($sql);
+	}
+
 	$db->sql_return_on_error(false);
 
-	$db->sql_query('DELETE FROM ' . $table . ' WHERE ' . $condition);
+	$sql = "DELETE FROM $table
+		WHERE " . $db->sql_in_set($column, $from_values);
+	$db->sql_query($sql);
 }
 
 // Functions handling topic/post tracking/marking
