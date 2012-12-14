@@ -5559,7 +5559,21 @@ function phpbb_convert_30_dbms_to_31($dbms)
 {
 	if (class_exists($dbms))
 	{
-		return $dbms;
+		// We have to do some more validation
+		// because e.g. class_exists('mysqli') is true.
+		if (strpos($dbms, 'phpbb_db_driver_') === 0)
+		{
+			return $dbms;
+		}
+		else
+		{
+			$reflection = new \ReflectionClass($dbms);
+
+			if ($reflection->isSubclassOf('phpbb_db_driver'))
+			{
+				return $dbms;
+			}
+		}
 	}
 
 	if (class_exists('phpbb_db_driver_' . $dbms))
