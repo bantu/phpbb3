@@ -417,16 +417,6 @@ function upload_attachment($form_name, $forum_id, $local = false, $local_storage
 	// Whether the uploaded file is in the image category
 	$is_image = (isset($extensions[$file->get('extension')]['display_cat'])) ? $extensions[$file->get('extension')]['display_cat'] == ATTACHMENT_CATEGORY_IMAGE : false;
 
-	// Make sure the image category only holds valid images...
-	if ($is_image && !$file->is_image())
-	{
-		$file->remove();
-
-		// If this error occurs a user tried to exploit an IE Bug by renaming extensions
-		// Since the image category is displaying content inline we need to catch this.
-		trigger_error($user->lang['ATTACHED_IMAGE_NOT_IMAGE']);
-	}
-
 	if (!$auth->acl_get('a_') && !$auth->acl_get('m_', $forum_id))
 	{
 		// Check Image Size, if it is an image
@@ -464,6 +454,15 @@ function upload_attachment($form_name, $forum_id, $local = false, $local_storage
 		$filedata['post_attach'] = false;
 
 		return $filedata;
+	}
+	else if ($is_image && !$file->is_image())
+	{
+		// Make sure the image category only holds valid images...
+		$file->remove();
+
+		// If this error occurs a user tried to exploit an IE Bug by renaming extensions
+		// Since the image category is displaying content inline we need to catch this.
+		trigger_error($user->lang['ATTACHED_IMAGE_NOT_IMAGE']);
 	}
 
 	$filedata['filesize'] = $file->get('filesize');
