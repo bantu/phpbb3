@@ -427,9 +427,6 @@ function upload_attachment($form_name, $forum_id, $local = false, $local_storage
 		trigger_error($user->lang['ATTACHED_IMAGE_NOT_IMAGE']);
 	}
 
-	// Do we have to create a thumbnail?
-	$filedata['thumbnail'] = ($is_image && $config['img_create_thumbnail']) ? 1 : 0;
-
 	if (!$auth->acl_get('a_') && !$auth->acl_get('m_', $forum_id))
 	{
 		// Check Image Size, if it is an image
@@ -456,6 +453,9 @@ function upload_attachment($form_name, $forum_id, $local = false, $local_storage
 	// Are we uploading an image *and* this image being within the image category?
 	// Only then perform additional image checks.
 	$file->move_file($config['upload_path'], false, !$is_image);
+
+	// Do we have to create a thumbnail?
+	$filedata['thumbnail'] = ($is_image && $config['img_create_thumbnail']) ? 1 : 0;
 
 	if (sizeof($file->error))
 	{
