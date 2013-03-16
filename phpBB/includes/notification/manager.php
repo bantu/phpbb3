@@ -601,12 +601,12 @@ class phpbb_notification_manager
 
 		foreach ($this->get_subscription_types() as $group_name => $types)
 		{
-			foreach ($types as $id => $type)
+			foreach ($types as $type => $type_data)
 			{
 				$sql = 'SELECT method, notify
 					FROM ' . $this->user_notifications_table . '
 					WHERE user_id = ' . (int) $user_id . "
-						AND item_type = '" . $this->db->sql_escape($id) . "'
+						AND item_type = '" . $this->db->sql_escape($type) . "'
 						AND item_id = 0";
 				$result = $this->db->sql_query($sql);
 
@@ -614,7 +614,7 @@ class phpbb_notification_manager
 				if (!$row)
 				{
 					// No rows at all, default to ''
-					$subscriptions[$id] = array('');
+					$subscriptions[$type] = array('');
 				}
 				else
 				{
@@ -625,12 +625,12 @@ class phpbb_notification_manager
 							continue;
 						}
 
-						if (!isset($subscriptions[$id]))
+						if (!isset($subscriptions[$type]))
 						{
-							$subscriptions[$id] = array();
+							$subscriptions[$type] = array();
 						}
 
-						$subscriptions[$id][] = $row['method'];
+						$subscriptions[$type][] = $row['method'];
 					}
 					while ($row = $this->db->sql_fetchrow($result));
 				}
