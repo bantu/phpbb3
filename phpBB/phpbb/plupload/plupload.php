@@ -235,6 +235,7 @@ class phpbb_plupload
 	protected function get_chunk_size()
 	{
 		return min(
+			pow(2, 19), // 1/2 MiB
 			$this->ini->get_bytes('upload_max_filesize'),
 			$this->ini->get_bytes('post_max_size'),
 			max(1, $this->ini->get_bytes('memory_limit')),
