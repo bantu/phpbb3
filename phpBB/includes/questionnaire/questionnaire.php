@@ -70,7 +70,7 @@ class phpbb_questionnaire_data_collector
 	/**
 	* Collect info into the data property.
 	*
-	* @return	void
+	* @return	null
 	*/
 	function collect()
 	{
@@ -259,6 +259,8 @@ class phpbb_questionnaire_phpbb_data_provider
 		global $phpbb_root_path, $phpEx;
 		include("{$phpbb_root_path}config.$phpEx");
 		unset($dbhost, $dbport, $dbname, $dbuser, $dbpasswd); // Just a precaution
+
+		$dbms = phpbb_convert_30_dbms_to_31($dbms);
 
 		// Only send certain config vars
 		$config_vars = array(

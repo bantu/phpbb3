@@ -23,7 +23,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 {
 	global $template, $db, $auth, $user;
 	global $phpbb_root_path, $phpEx, $config;
-	global $request, $cache, $phpbb_php_ini, $phpbb_mimetype_extension_map;
+	global $phpbb_container, $cache;
 
 	// Damn php and globals - i know, this is horrible
 	// Needed for handle_message_list_actions()
@@ -265,19 +265,16 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 			// Passworded forum?
 			if ($post['forum_id'])
 			{
-				$sql = 'SELECT forum_password
+				$sql = 'SELECT forum_id, forum_name, forum_password
 					FROM ' . FORUMS_TABLE . '
 					WHERE forum_id = ' . (int) $post['forum_id'];
 				$result = $db->sql_query($sql);
-				$forum_password = (string) $db->sql_fetchfield('forum_password');
+				$forum_data = $db->sql_fetchrow($result);
 				$db->sql_freeresult($result);
 
-				if ($forum_password)
+				if (!empty($forum_data['forum_password']))
 				{
-					login_forum_box(array(
-						'forum_id'			=> $post['forum_id'],
-						'forum_password'	=> $forum_password,
-					));
+					login_forum_box($forum_data);
 				}
 			}
 		}
@@ -353,7 +350,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 		$message_attachment = 0;
 		$message_text = $message_subject = '';
 
-		if ($to_user_id && $action == 'post')
+		if ($to_user_id && $to_user_id != ANONYMOUS && $action == 'post')
 		{
 			$address_list['u'][$to_user_id] = 'to';
 		}
@@ -388,7 +385,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 	}
 
 	$message_parser = new parse_message();
-	$plupload = new phpbb_plupload($config, $request, $user, $phpbb_root_path, $phpbb_php_ini, $phpbb_mimetype_extension_map);
+	$plupload = $phpbb_container->get('plupload');
 	$message_parser->set_plupload($plupload);
 
 	$message_parser->message = ($action == 'reply') ? '' : $message_text;

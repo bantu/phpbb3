@@ -46,8 +46,6 @@ class ucp_prefs
 					'viewemail'		=> request_var('viewemail', (bool) $user->data['user_allow_viewemail']),
 					'massemail'		=> request_var('massemail', (bool) $user->data['user_allow_massemail']),
 					'hideonline'	=> request_var('hideonline', (bool) !$user->data['user_allow_viewonline']),
-					'notifypm'		=> request_var('notifypm', (bool) $user->data['user_notify_pm']),
-					'popuppm'		=> request_var('popuppm', (bool) $user->optionget('popuppm')),
 					'allowpm'		=> request_var('allowpm', (bool) $user->data['user_allow_pm']),
 				);
 
@@ -81,15 +79,12 @@ class ucp_prefs
 
 					if (!sizeof($error))
 					{
-						$user->optionset('popuppm', $data['popuppm']);
-
 						$sql_ary = array(
 							'user_allow_pm'			=> $data['allowpm'],
 							'user_allow_viewemail'	=> $data['viewemail'],
 							'user_allow_massemail'	=> $data['massemail'],
 							'user_allow_viewonline'	=> ($auth->acl_get('u_hideonline')) ? !$data['hideonline'] : $user->data['user_allow_viewonline'],
 							'user_notify_type'		=> $data['notifymethod'],
-							'user_notify_pm'		=> $data['notifypm'],
 							'user_options'			=> $user->data['user_options'],
 
 							'user_dateformat'		=> $data['dateformat'],
@@ -132,6 +127,36 @@ class ucp_prefs
 				$dateformat_options .= '>' . $user->lang['CUSTOM_DATEFORMAT'] . '</option>';
 
 				$timezone_selects = phpbb_timezone_select($user, $data['tz'], true);
+
+				// check if there are any user-selectable languages
+				$sql = 'SELECT COUNT(lang_id) as languages_count
+								FROM ' . LANG_TABLE;
+				$result = $db->sql_query($sql);
+				if ($db->sql_fetchfield('languages_count') > 1)
+				{
+					$s_more_languages = true;
+				}
+				else
+				{
+					$s_more_languages = false;
+				}
+				$db->sql_freeresult($result);
+
+				// check if there are any user-selectable styles
+				$sql = 'SELECT COUNT(style_id) as styles_count
+								FROM ' . STYLES_TABLE . '
+								WHERE style_active = 1';
+				$result = $db->sql_query($sql);
+				if ($db->sql_fetchfield('styles_count') > 1)
+				{
+					$s_more_styles = true;
+				}
+				else
+				{
+					$s_more_styles = false;
+				}
+				$db->sql_freeresult($result);
+
 				$template->assign_vars(array(
 					'ERROR'				=> (sizeof($error)) ? implode('<br />', $error) : '',
 
@@ -142,8 +167,6 @@ class ucp_prefs
 					'S_MASS_EMAIL'		=> $data['massemail'],
 					'S_ALLOW_PM'		=> $data['allowpm'],
 					'S_HIDE_ONLINE'		=> $data['hideonline'],
-					'S_NOTIFY_PM'		=> $data['notifypm'],
-					'S_POPUP_PM'		=> $data['popuppm'],
 
 					'DATE_FORMAT'			=> $data['dateformat'],
 					'A_DATE_FORMAT'			=> addslashes($data['dateformat']),
@@ -151,6 +174,9 @@ class ucp_prefs
 					'S_CUSTOM_DATEFORMAT'	=> $s_custom,
 					'DEFAULT_DATEFORMAT'	=> $config['default_dateformat'],
 					'A_DEFAULT_DATEFORMAT'	=> addslashes($config['default_dateformat']),
+
+					'S_MORE_LANGUAGES'	=> $s_more_languages,
+					'S_MORE_STYLES'			=> $s_more_styles,
 
 					'S_LANG_OPTIONS'		=> language_select($data['lang']),
 					'S_STYLE_OPTIONS'		=> ($config['override_user_style']) ? '' : style_select($data['style']),

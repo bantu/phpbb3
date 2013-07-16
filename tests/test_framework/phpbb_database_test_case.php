@@ -11,7 +11,11 @@ abstract class phpbb_database_test_case extends PHPUnit_Extensions_Database_Test
 {
 	static private $already_connected;
 
+	private $db_connections;
+
 	protected $test_case_helpers;
+
+	protected $fixture_xml_data;
 
 	public function __construct($name = NULL, array $data = array(), $dataName = '')
 	{
@@ -26,6 +30,51 @@ abstract class phpbb_database_test_case extends PHPUnit_Extensions_Database_Test
 
 			'phpbb_database_test_case' => array('already_connected'),
 		);
+
+		$this->db_connections = array();
+	}
+
+	protected function tearDown()
+	{
+		parent::tearDown();
+
+		// Close all database connections from this test
+		if (!empty($this->db_connections))
+		{
+			foreach ($this->db_connections as $db)
+			{
+				$db->sql_close();
+			}
+		}
+	}
+
+	protected function setUp()
+	{
+		parent::setUp();
+
+		// Resynchronise tables if a fixture was loaded
+		if (isset($this->fixture_xml_data))
+		{
+			$config = $this->get_database_config();
+			$manager = $this->create_connection_manager($config);
+			$manager->connect();
+			$manager->post_setup_synchronisation($this->fixture_xml_data);
+		}
+	}
+
+	/**
+	* Performs synchronisations for a given table/column set on the database
+	*
+	* @param	array	$table_column_map		Information about the tables/columns to synchronise
+	*
+	* @return null
+	*/
+	protected function database_synchronisation($table_column_map)
+	{
+		$config = $this->get_database_config();
+		$manager = $this->create_connection_manager($config);
+		$manager->connect();
+		$manager->database_synchronisation($table_column_map);
 	}
 
 	public function createXMLDataSet($path)
@@ -33,7 +82,7 @@ abstract class phpbb_database_test_case extends PHPUnit_Extensions_Database_Test
 		$db_config = $this->get_database_config();
 
 		// Firebird requires table and column names to be uppercase
-		if ($db_config['dbms'] == 'firebird')
+		if ($db_config['dbms'] == 'phpbb_db_driver_firebird')
 		{
 			$xml_data = file_get_contents($path);
 			$xml_data = preg_replace_callback('/(?:(<table name="))([a-z_]+)(?:(">))/', 'phpbb_database_test_case::to_upper', $xml_data);
@@ -47,7 +96,9 @@ abstract class phpbb_database_test_case extends PHPUnit_Extensions_Database_Test
 			$path = $meta_data['uri'];
 		}
 
-		return parent::createXMLDataSet($path);
+		$this->fixture_xml_data = parent::createXMLDataSet($path);
+
+		return $this->fixture_xml_data;
 	}
 
 	public function get_test_case_helpers()
@@ -100,10 +151,10 @@ abstract class phpbb_database_test_case extends PHPUnit_Extensions_Database_Test
 
 		$config = $this->get_database_config();
 
-		require_once dirname(__FILE__) . '/../../phpBB/includes/db/' . $config['dbms'] . '.php';
-		$dbal = 'dbal_' . $config['dbms'];
-		$db = new $dbal();
+		$db = new $config['dbms']();
 		$db->sql_connect($config['dbhost'], $config['dbuser'], $config['dbpasswd'], $config['dbname'], $config['dbport']);
+
+		$this->db_connections[] = $db;
 
 		return $db;
 	}
@@ -140,5 +191,21 @@ abstract class phpbb_database_test_case extends PHPUnit_Extensions_Database_Test
 	static public function to_upper($matches)
 	{
 		return $matches[1] . strtoupper($matches[2]) . $matches[3];
+	}
+
+	public function assert_array_content_equals($one, $two)
+	{
+		// http://stackoverflow.com/questions/3838288/phpunit-assert-two-arrays-are-equal-but-order-of-elements-not-important
+		// but one array_diff is not enough!
+		if (sizeof(array_diff($one, $two)) || sizeof(array_diff($two, $one)))
+		{
+			// get a nice error message
+			$this->assertEquals($one, $two);
+		}
+		else
+		{
+			// increase assertion count
+			$this->assertTrue(true);
+		}
 	}
 }

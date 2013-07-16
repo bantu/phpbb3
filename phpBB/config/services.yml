@@ -1,15 +1,31 @@
 imports:
     - { resource: tables.yml }
     - { resource: cron_tasks.yml }
+    - { resource: notifications.yml }
+    - { resource: migrator.yml }
+    - { resource: avatars.yml }
+    - { resource: feed.yml }
+    - { resource: auth_providers.yml }
 
 services:
     auth:
         class: phpbb_auth
 
+    avatar.manager:
+        class: phpbb_avatar_manager
+        arguments:
+            - @config
+            - @avatar.driver_collection
+            - @service_container
+
     cache:
         class: phpbb_cache_service
         arguments:
              - @cache.driver
+             - @config
+             - @dbal.conn
+             - %core.root_path%
+             - %core.php_ext%
 
     cache.driver:
         class: %cache.driver.class%
@@ -22,7 +38,7 @@ services:
         arguments:
             - phpbb_
             - %core.root_path%includes/
-            - .%core.php_ext%
+            - %core.php_ext%
         calls:
             - [register, []]
             - [set_cache, [@cache.driver]]
@@ -32,7 +48,7 @@ services:
         arguments:
             - phpbb_ext_
             - %core.root_path%ext/
-            - .%core.php_ext%
+            - %core.php_ext%
         calls:
             - [register, []]
             - [set_cache, [@cache.driver]]
@@ -44,15 +60,51 @@ services:
             - @cache.driver
             - %tables.config%
 
-    cron.task_provider:
-        class: phpbb_cron_task_provider
+    config_text:
+        class: phpbb_config_db_text
         arguments:
-            - @container
+            - @dbal.conn
+            - %tables.config_text%
+
+    content.visibility:
+        class: phpbb_content_visibility
+        arguments:
+            - @auth
+            - @dbal.conn
+            - @user
+            - %core.root_path%
+            - %core.php_ext%
+            - %tables.forums%
+            - %tables.posts%
+            - %tables.topics%
+            - %tables.users%
+
+    controller.helper:
+        class: phpbb_controller_helper
+        arguments:
+            - @template
+            - @user
+            - %core.root_path%
+            - %core.php_ext%
+
+    controller.resolver:
+        class: phpbb_controller_resolver
+        arguments:
+            - @user
+            - @service_container
+            - @style
+
+    cron.task_collection:
+        class: phpbb_di_service_collection
+        arguments:
+            - @service_container
+        tags:
+            - { name: service_collection, tag: cron.task }
 
     cron.manager:
         class: phpbb_cron_manager
         arguments:
-            - @cron.task_provider
+            - @cron.task_collection
             - %core.root_path%
             - %core.php_ext%
 
@@ -65,11 +117,18 @@ services:
 
     dispatcher:
         class: phpbb_event_dispatcher
+        arguments:
+            - @service_container
 
     dbal.conn:
         class: %dbal.driver.class%
         calls:
             - [sql_connect, [%dbal.dbhost%, %dbal.dbuser%, %dbal.dbpasswd%, %dbal.dbname%, %dbal.dbport%, false, %dbal.new_link%]]
+
+    dbal.tools:
+        class: phpbb_db_tools
+        arguments:
+            - @dbal.conn
 
     event.subscriber_loader:
         class: phpbb_event_extension_subscriber_loader
@@ -82,19 +141,119 @@ services:
     ext.manager:
         class: phpbb_extension_manager
         arguments:
+            - @service_container
             - @dbal.conn
             - @config
+            - @filesystem
             - %tables.ext%
             - %core.root_path%
-            - .%core.php_ext%
+            - %core.php_ext%
             - @cache.driver
 
-    processor.ext:
-        class: phpbb_di_processor_ext
+    ext.finder:
+        class: phpbb_extension_finder
         arguments:
             - @ext.manager
+            - @filesystem
+            - %core.root_path%
+            - @cache.driver
+            - %core.php_ext%
+            - _ext_finder
+
+    filesystem:
+        class: phpbb_filesystem
+
+    groupposition.legend:
+        class: phpbb_groupposition_legend
+        arguments:
+            - @dbal.conn
+            - @user
+
+    groupposition.teampage:
+        class: phpbb_groupposition_teampage
+        arguments:
+            - @dbal.conn
+            - @user
+            - @cache.driver
+
+    http_kernel:
+        class: Symfony\Component\HttpKernel\HttpKernel
+        arguments:
+            - @dispatcher
+            - @controller.resolver
+
+    hook_finder:
+        class: phpbb_hook_finder
+        arguments:
+            - %core.root_path%
+            - %core.php_ext%
+            - @cache.driver
+
+    kernel_request_subscriber:
+        class: phpbb_event_kernel_request_subscriber
+        arguments:
+            - @ext.finder
+            - %core.root_path%
+            - %core.php_ext%
         tags:
-            - { name: container.processor }
+            - { name: kernel.event_subscriber }
+
+    kernel_exception_subscriber:
+        class: phpbb_event_kernel_exception_subscriber
+        arguments:
+            - @template
+            - @user
+        tags:
+            - { name: kernel.event_subscriber }
+
+    kernel_terminate_subscriber:
+        class: phpbb_event_kernel_terminate_subscriber
+        tags:
+            - { name: kernel.event_subscriber }
+
+    log:
+        class: phpbb_log
+        arguments:
+            - @dbal.conn
+            - @user
+            - @auth
+            - @dispatcher
+            - %core.root_path%
+            - %core.adm_relative_path%
+            - %core.php_ext%
+            - %tables.log%
+
+    mimetype_extension_map:
+        class: phpbb_mimetype_extension_map
+
+    notification_manager:
+        class: phpbb_notification_manager
+        arguments:
+            - @notification.type_collection
+            - @notification.method_collection
+            - @service_container
+            - @user_loader
+            - @dbal.conn
+            - @cache
+            - @user
+            - %core.root_path%
+            - %core.php_ext%
+            - %tables.notification_types%
+            - %tables.notifications%
+            - %tables.user_notifications%
+
+    php_ini:
+        class: phpbb_php_ini
+
+    plupload:
+        class: phpbb_plupload
+        arguments:
+            - @config
+            - @request
+            - @user
+            - %core.root_path%
+            - @php_ini
+            - @mimetype_extension_map
 
     request:
         class: phpbb_request
@@ -118,22 +277,32 @@ services:
         arguments:
             - @ext.manager
             - @style.path_provider
+            - %core.root_path%
 
     style.path_provider:
         class: phpbb_style_path_provider
 
     template:
-        class: phpbb_template
+        class: phpbb_template_twig
         arguments:
             - %core.root_path%
             - %core.php_ext%
             - @config
             - @user
-            - @style.resource_locator
             - @template_context
+            - @ext.manager
+            - %core.adm_relative_path%
 
     template_context:
         class: phpbb_template_context
 
     user:
         class: phpbb_user
+
+    user_loader:
+        class: phpbb_user_loader
+        arguments:
+            - @dbal.conn
+            - %core.root_path%
+            - %core.php_ext%
+            - %tables.users%

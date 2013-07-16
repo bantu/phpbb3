@@ -76,7 +76,7 @@ class filespec
 			$this->mimetype = 'application/octetstream';
 		}
 
-		$this->extension = strtolower($this->get_extension($this->realname));
+		$this->extension = strtolower(self::get_extension($this->realname));
 
 		// Try to get real filesize from temporary folder (not always working) ;)
 		$this->filesize = (@filesize($this->filename)) ? @filesize($this->filename) : $this->filesize;
@@ -196,8 +196,11 @@ class filespec
 
 	/**
 	* Get file extension
+	*
+	* @param string Filename that needs to be checked
+	* @return string Extension of the supplied filename
 	*/
-	function get_extension($filename)
+	static public function get_extension($filename)
 	{
 		if (strpos($filename, '.') === false)
 		{
@@ -378,7 +381,7 @@ class filespec
 				}
 
 				// Check image type
-				$types = $this->upload->image_types();
+				$types = fileupload::image_types();
 
 				if (!isset($types[$this->image_info[2]]) || !in_array($this->extension, $types[$this->image_info[2]]))
 				{
@@ -1040,9 +1043,11 @@ class fileupload
 	}
 
 	/**
-	* Return image type/extension mapping
+	* Get image type/extension mapping
+	*
+	* @return array Array containing the image types and their extensions
 	*/
-	function image_types()
+	static public function image_types()
 	{
 		return array(
 			IMAGETYPE_GIF		=> array('gif'),

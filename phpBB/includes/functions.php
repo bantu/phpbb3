@@ -7,6 +7,8 @@
 *
 */
 
+use Symfony\Component\HttpFoundation\Request;
+
 /**
 * @ignore
 */
@@ -95,7 +97,18 @@ function request_var($var_name, $default, $multibyte = false, $cookie = false, $
 }
 
 /**
-* Set config value. Creates missing config entry.
+* Sets a configuration option's value.
+*
+* Please note that this function does not update the is_dynamic value for
+* an already existing config option.
+*
+* @param string $config_name   The configuration option's name
+* @param string $config_value  New configuration value
+* @param bool   $is_dynamic    Whether this variable should be cached (false) or
+*                              if it changes too frequently (true) to be
+*                              efficiently cached.
+*
+* @return null
 *
 * @deprecated
 */
@@ -117,7 +130,15 @@ function set_config($config_name, $config_value, $is_dynamic = false, phpbb_conf
 }
 
 /**
-* Set dynamic config value with arithmetic operation.
+* Increments an integer config value directly in the database.
+*
+* @param string $config_name   The configuration option's name
+* @param int    $increment     Amount to increment by
+* @param bool   $is_dynamic    Whether this variable should be cached (false) or
+*                              if it changes too frequently (true) to be
+*                              efficiently cached.
+*
+* @return null
 *
 * @deprecated
 */
@@ -229,7 +250,8 @@ function phpbb_gmgetdate($time = false)
 /**
 * Return formatted string for filesizes
 *
-* @param int	$value			filesize in bytes
+* @param mixed	$value			filesize in bytes
+*								(non-negative number; int, float or string)
 * @param bool	$string_only	true if language string should be returned
 * @param array	$allowed_units	only allow these units (data array indexes)
 *
@@ -241,6 +263,12 @@ function get_formatted_filesize($value, $string_only = true, $allowed_units = fa
 	global $user;
 
 	$available_units = array(
+		'tb' => array(
+			'min' 		=> 1099511627776, // pow(2, 40)
+			'index'		=> 4,
+			'si_unit'	=> 'TB',
+			'iec_unit'	=> 'TIB',
+		),
 		'gb' => array(
 			'min' 		=> 1073741824, // pow(2, 30)
 			'index'		=> 3,
@@ -818,7 +846,7 @@ function phpbb_is_writable($file)
 */
 function phpbb_is_absolute($path)
 {
-	return ($path[0] == '/' || (DIRECTORY_SEPARATOR == '\\' && preg_match('#^[a-z]:[/\\\]#i', $path))) ? true : false;
+	return (isset($path[0]) && $path[0] == '/' || preg_match('#^[a-z]:[/\\\]#i', $path)) ? true : false;
 }
 
 /**
@@ -1021,31 +1049,33 @@ else
 /**
 * Eliminates useless . and .. components from specified path.
 *
+* Deprecated, use filesystem class instead
+*
 * @param string $path Path to clean
 * @return string Cleaned path
+*
+* @deprecated
 */
 function phpbb_clean_path($path)
 {
-	$exploded = explode('/', $path);
-	$filtered = array();
-	foreach ($exploded as $part)
-	{
-		if ($part === '.' && !empty($filtered))
-		{
-			continue;
-		}
+	global $phpbb_container;
 
-		if ($part === '..' && !empty($filtered) && $filtered[sizeof($filtered) - 1] !== '..')
-		{
-			array_pop($filtered);
-		}
-		else
-		{
-			$filtered[] = $part;
-		}
+	if ($phpbb_container)
+	{
+		$phpbb_filesystem = $phpbb_container->get('filesystem');
 	}
-	$path = implode('/', $filtered);
-	return $path;
+	else
+	{
+		// The container is not yet loaded, use a new instance
+		if (!class_exists('phpbb_filesystem'))
+		{
+			global $phpbb_root_path, $phpEx;
+			require($phpbb_root_path . 'includes/filesystem.' . $phpEx);
+		}
+		$phpbb_filesystem = new phpbb_filesystem();
+	}
+
+	return $phpbb_filesystem->clean_path($path);
 }
 
 // functions used for building option fields
@@ -1319,7 +1349,7 @@ function phpbb_timezone_select($user, $default = '', $truncate = false)
 function markread($mode, $forum_id = false, $topic_id = false, $post_time = 0, $user_id = 0)
 {
 	global $db, $user, $config;
-	global $request;
+	global $request, $phpbb_container;
 
 	$post_time = ($post_time === 0 || $post_time > time()) ? time() : (int) $post_time;
 
@@ -1327,6 +1357,20 @@ function markread($mode, $forum_id = false, $topic_id = false, $post_time = 0, $
 	{
 		if ($forum_id === false || !sizeof($forum_id))
 		{
+			// Mark all forums read (index page)
+
+			$phpbb_notifications = $phpbb_container->get('notification_manager');
+
+			// Mark all topic notifications read for this user
+			$phpbb_notifications->mark_notifications_read(array(
+				'topic',
+				'quote',
+				'bookmark',
+				'post',
+				'approve_topic',
+				'approve_post',
+			), false, $user->data['user_id'], $post_time);
+
 			if ($config['load_db_lastread'] && $user->data['is_registered'])
 			{
 				// Mark all forums read (index page)
@@ -1380,6 +1424,32 @@ function markread($mode, $forum_id = false, $topic_id = false, $post_time = 0, $
 		{
 			$forum_id = array($forum_id);
 		}
+
+		$phpbb_notifications = $phpbb_container->get('notification_manager');
+
+		$phpbb_notifications->mark_notifications_read_by_parent(array(
+			'topic',
+			'approve_topic',
+		), $forum_id, $user->data['user_id'], $post_time);
+
+		// Mark all post/quote notifications read for this user in this forum
+		$topic_ids = array();
+		$sql = 'SELECT topic_id
+			FROM ' . TOPICS_TABLE . '
+			WHERE ' . $db->sql_in_set('forum_id', $forum_id);
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$topic_ids[] = $row['topic_id'];
+		}
+		$db->sql_freeresult($result);
+
+		$phpbb_notifications->mark_notifications_read_by_parent(array(
+			'quote',
+			'bookmark',
+			'post',
+			'approve_post',
+		), $topic_ids, $user->data['user_id'], $post_time);
 
 		// Add 0 to forums array to mark global announcements correctly
 		// $forum_id[] = 0;
@@ -1477,6 +1547,21 @@ function markread($mode, $forum_id = false, $topic_id = false, $post_time = 0, $
 		{
 			return;
 		}
+
+		$phpbb_notifications = $phpbb_container->get('notification_manager');
+
+		// Mark post notifications read for this user in this topic
+		$phpbb_notifications->mark_notifications_read(array(
+			'topic',
+			'approve_topic',
+		), $topic_id, $user->data['user_id'], $post_time);
+
+		$phpbb_notifications->mark_notifications_read_by_parent(array(
+			'quote',
+			'bookmark',
+			'post',
+			'approve_post',
+		), $topic_id, $user->data['user_id'], $post_time);
 
 		if ($config['load_db_lastread'] && $user->data['is_registered'])
 		{
@@ -1889,7 +1974,7 @@ function get_unread_topics($user_id = false, $sql_extra = '', $sql_sort = '', $s
 */
 function update_forum_tracking_info($forum_id, $forum_last_post_time, $f_mark_time = false, $mark_time_forum = false)
 {
-	global $db, $tracking_topics, $user, $config, $auth, $request;
+	global $db, $tracking_topics, $user, $config, $auth, $request, $phpbb_container;
 
 	// Determine the users last forum mark time if not given.
 	if ($mark_time_forum === false)
@@ -1914,7 +1999,7 @@ function update_forum_tracking_info($forum_id, $forum_last_post_time, $f_mark_ti
 
 	// Handle update of unapproved topics info.
 	// Only update for moderators having m_approve permission for the forum.
-	$sql_update_unapproved = ($auth->acl_get('m_approve', $forum_id)) ? '': 'AND t.topic_approved = 1';
+	$phpbb_content_visibility = $phpbb_container->get('content.visibility');
 
 	// Check the forum for any left unread topics.
 	// If there are none, we mark the forum as read.
@@ -1934,8 +2019,8 @@ function update_forum_tracking_info($forum_id, $forum_last_post_time, $f_mark_ti
 						AND tt.user_id = ' . $user->data['user_id'] . ')
 				WHERE t.forum_id = ' . $forum_id . '
 					AND t.topic_last_post_time > ' . $mark_time_forum . '
-					AND t.topic_moved_id = 0 ' .
-					$sql_update_unapproved . '
+					AND t.topic_moved_id = 0
+					AND ' . $phpbb_content_visibility->get_visibility_sql('topic', $forum_id, 't.') . '
 					AND (tt.topic_id IS NULL
 						OR tt.mark_time < t.topic_last_post_time)';
 			$result = $db->sql_query_limit($sql, 1);
@@ -1959,8 +2044,8 @@ function update_forum_tracking_info($forum_id, $forum_last_post_time, $f_mark_ti
 				FROM ' . TOPICS_TABLE . ' t
 				WHERE t.forum_id = ' . $forum_id . '
 					AND t.topic_last_post_time > ' . $mark_time_forum . '
-					AND t.topic_moved_id = 0 ' .
-					$sql_update_unapproved;
+					AND t.topic_moved_id = 0
+					AND ' . $phpbb_content_visibility->get_visibility_sql('topic', $forum_id, 't.');
 			$result = $db->sql_query($sql);
 
 			$check_forum = $tracking_topics['tf'][$forum_id];
@@ -2260,9 +2345,8 @@ function phpbb_generate_template_pagination($template, $base_url, $block_var_nam
 		$tpl_prefix . 'BASE_URL'		=> $base_url,
 		'A_' . $tpl_prefix . 'BASE_URL'		=> addslashes($base_url),
 		$tpl_prefix . 'PER_PAGE'		=> $per_page,
-		$tpl_prefix . 'PREVIOUS_PAGE'	=> $previous_page,
-		$tpl_prefix . 'PREV_PAGE'		=> $previous_page,
-		$tpl_prefix . 'NEXT_PAGE'		=> ($on_page != $total_pages) ? $base_url . $url_delim . $start_name . '=' . ($on_page * $per_page) : '',
+		'U_' . $tpl_prefix . 'PREVIOUS_PAGE'	=> $previous_page,
+		'U_' . $tpl_prefix . 'NEXT_PAGE'		=> ($on_page != $total_pages) ? $base_url . $url_delim . $start_name . '=' . ($on_page * $per_page) : '',
 		$tpl_prefix . 'TOTAL_PAGES'		=> $total_pages,
 		$tpl_prefix . 'CURRENT_PAGE'	=> $on_page,
 	);
@@ -2648,7 +2732,7 @@ function redirect($url, $return = false, $disable_cd_check = false)
 	// Make sure no linebreaks are there... to prevent http response splitting for PHP < 4.4.2
 	if (strpos(urldecode($url), "\n") !== false || strpos(urldecode($url), "\r") !== false || strpos($url, ';') !== false)
 	{
-		trigger_error('Tried to redirect to potentially insecure url.', E_USER_ERROR);
+		trigger_error('INSECURE_REDIRECT', E_USER_ERROR);
 	}
 
 	// Now, also check the protocol and for a valid url the last time...
@@ -2657,7 +2741,7 @@ function redirect($url, $return = false, $disable_cd_check = false)
 
 	if ($url_parts === false || empty($url_parts['scheme']) || !in_array($url_parts['scheme'], $allowed_protocols))
 	{
-		trigger_error('Tried to redirect to potentially insecure url.', E_USER_ERROR);
+		trigger_error('INSECURE_REDIRECT', E_USER_ERROR);
 	}
 
 	if ($return)
@@ -2822,7 +2906,7 @@ function meta_refresh($time, $url, $disable_cd_check = false)
 
 		// For XHTML compatibility we change back & to &amp;
 		$template->assign_vars(array(
-			'META' => '<meta http-equiv="refresh" content="' . $time . ';url=' . $url . '" />')
+			'META' => '<meta http-equiv="refresh" content="' . $time . '; url=' . $url . '" />')
 		);
 	}
 
@@ -2847,12 +2931,10 @@ function meta_refresh($time, $url, $disable_cd_check = false)
 *
 * @param int $code HTTP status code
 * @param string $message Message for the status code
-* @return void
+* @return null
 */
 function send_status_line($code, $message)
 {
-	global $request;
-
 	if (substr(strtolower(@php_sapi_name()), 0, 3) === 'cgi')
 	{
 		// in theory, we shouldn't need that due to php doing it. Reality offers a differing opinion, though
@@ -2860,16 +2942,33 @@ function send_status_line($code, $message)
 	}
 	else
 	{
-		if ($request->server('SERVER_PROTOCOL'))
-		{
-			$version = $request->server('SERVER_PROTOCOL');
-		}
-		else
-		{
-			$version = 'HTTP/1.0';
-		}
+		$version = phpbb_request_http_version();
 		header("$version $code $message", true, $code);
 	}
+}
+
+/**
+* Returns the HTTP version used in the current request.
+*
+* Handles the case of being called before $request is present,
+* in which case it falls back to the $_SERVER superglobal.
+*
+* @return string HTTP version
+*/
+function phpbb_request_http_version()
+{
+	global $request;
+
+	if ($request && $request->server('SERVER_PROTOCOL'))
+	{
+		return $request->server('SERVER_PROTOCOL');
+	}
+	else if (isset($_SERVER['SERVER_PROTOCOL']))
+	{
+		return $_SERVER['SERVER_PROTOCOL'];
+	}
+
+	return 'HTTP/1.0';
 }
 
 //Form validation
@@ -3060,8 +3159,9 @@ function confirm_box($check, $title = '', $hidden = '', $html_body = 'confirm_bo
 
 		'YES_VALUE'			=> $user->lang['YES'],
 		'S_CONFIRM_ACTION'	=> $u_action,
-		'S_HIDDEN_FIELDS'	=> $hidden . $s_hidden_fields)
-	);
+		'S_HIDDEN_FIELDS'	=> $hidden . $s_hidden_fields,
+		'S_AJAX_REQUEST'	=> $request->is_ajax(),
+	));
 
 	$sql = 'UPDATE ' . USERS_TABLE . " SET user_last_confirm_key = '" . $db->sql_escape($confirm_key) . "'
 		WHERE user_id = " . $user->data['user_id'];
@@ -3073,8 +3173,9 @@ function confirm_box($check, $title = '', $hidden = '', $html_body = 'confirm_bo
 		$u_action .= '&confirm_uid=' . $user->data['user_id'] . '&sess=' . $user->session_id . '&sid=' . $user->session_id;
 		$json_response = new phpbb_json_response;
 		$json_response->send(array(
+			'MESSAGE_BODY'		=> $template->assign_display('body'),
 			'MESSAGE_TITLE'		=> (!isset($user->lang[$title])) ? $user->lang['CONFIRM'] : $user->lang[$title],
-			'MESSAGE_TEXT' 	=> (!isset($user->lang[$title . '_CONFIRM'])) ? $title : $user->lang[$title . '_CONFIRM'],
+			'MESSAGE_TEXT'		=> (!isset($user->lang[$title . '_CONFIRM'])) ? $title : $user->lang[$title . '_CONFIRM'],
 
 			'YES_VALUE'			=> $user->lang['YES'],
 			'S_CONFIRM_ACTION'	=> str_replace('&amp;', '&', $u_action), //inefficient, rewrite whole function
@@ -3200,8 +3301,7 @@ function login_box($redirect = '', $l_explain = '', $l_success = '', $admin = fa
 				return;
 			}
 
-			$redirect = meta_refresh(3, $redirect);
-			trigger_error($message . '<br /><br />' . sprintf($l_redirect, '<a href="' . $redirect . '">', '</a>'));
+			redirect($redirect);
 		}
 
 		// Something failed, determine what...
@@ -3365,6 +3465,7 @@ function login_forum_box($forum_data)
 	page_header($user->lang['LOGIN'], false);
 
 	$template->assign_vars(array(
+		'FORUM_NAME'			=> isset($forum_data['forum_name']) ? $forum_data['forum_name'] : '',
 		'S_LOGIN_ACTION'		=> build_url(array('f')),
 		'S_HIDDEN_FIELDS'		=> build_hidden_fields(array('f' => $forum_data['forum_id'])))
 	);
@@ -3484,69 +3585,49 @@ function parse_cfg_file($filename, $lines = false)
 }
 
 /**
-* Add log event
+* Add log entry
+*
+* @param	string	$mode				The mode defines which log_type is used and from which log the entry is retrieved
+* @param	int		$forum_id			Mode 'mod' ONLY: forum id of the related item, NOT INCLUDED otherwise
+* @param	int		$topic_id			Mode 'mod' ONLY: topic id of the related item, NOT INCLUDED otherwise
+* @param	int		$reportee_id		Mode 'user' ONLY: user id of the reportee, NOT INCLUDED otherwise
+* @param	string	$log_operation		Name of the operation
+* @param	array	$additional_data	More arguments can be added, depending on the log_type
+*
+* @return	int|bool		Returns the log_id, if the entry was added to the database, false otherwise.
+*
+* @deprecated	Use $phpbb_log->add() instead
 */
 function add_log()
 {
-	global $db, $user;
-
-	// In phpBB 3.1.x i want to have logging in a class to be able to control it
-	// For now, we need a quite hakish approach to circumvent logging for some actions
-	// @todo implement cleanly
-	if (!empty($GLOBALS['skip_add_log']))
-	{
-		return false;
-	}
+	global $phpbb_log, $user;
 
 	$args = func_get_args();
+	$mode = array_shift($args);
 
-	$mode			= array_shift($args);
-	$reportee_id	= ($mode == 'user') ? intval(array_shift($args)) : '';
-	$forum_id		= ($mode == 'mod') ? intval(array_shift($args)) : '';
-	$topic_id		= ($mode == 'mod') ? intval(array_shift($args)) : '';
-	$action			= array_shift($args);
-	$data			= (!sizeof($args)) ? '' : serialize($args);
-
-	$sql_ary = array(
-		'user_id'		=> (empty($user->data)) ? ANONYMOUS : $user->data['user_id'],
-		'log_ip'		=> $user->ip,
-		'log_time'		=> time(),
-		'log_operation'	=> $action,
-		'log_data'		=> $data,
-	);
-
+	// This looks kind of dirty, but add_log has some additional data before the log_operation
+	$additional_data = array();
 	switch ($mode)
 	{
 		case 'admin':
-			$sql_ary['log_type'] = LOG_ADMIN;
-		break;
-
-		case 'mod':
-			$sql_ary += array(
-				'log_type'	=> LOG_MOD,
-				'forum_id'	=> $forum_id,
-				'topic_id'	=> $topic_id
-			);
-		break;
-
-		case 'user':
-			$sql_ary += array(
-				'log_type'		=> LOG_USERS,
-				'reportee_id'	=> $reportee_id
-			);
-		break;
-
 		case 'critical':
-			$sql_ary['log_type'] = LOG_CRITICAL;
 		break;
-
-		default:
-			return false;
+		case 'mod':
+			$additional_data['forum_id'] = array_shift($args);
+			$additional_data['topic_id'] = array_shift($args);
+		break;
+		case 'user':
+			$additional_data['reportee_id'] = array_shift($args);
+		break;
 	}
 
-	$db->sql_query('INSERT INTO ' . LOG_TABLE . ' ' . $db->sql_build_array('INSERT', $sql_ary));
+	$log_operation = array_shift($args);
+	$additional_data = array_merge($additional_data, $args);
 
-	return $db->sql_nextid();
+	$user_id = (empty($user->data)) ? ANONYMOUS : $user->data['user_id'];
+	$user_ip = (empty($user->ip)) ? '' : $user->ip;
+
+	return $phpbb_log->add($mode, $user_id, $user_ip, $log_operation, time(), $additional_data);
 }
 
 /**
@@ -4102,7 +4183,7 @@ function phpbb_checkdnsrr($host, $type = 'MX')
 // Handler, header and footer
 
 /**
-* Error and message handler, call with trigger_error if reqd
+* Error and message handler, call with trigger_error if read
 */
 function msg_handler($errno, $msg_text, $errfile, $errline)
 {
@@ -4771,7 +4852,7 @@ function phpbb_get_plural_form($rule, $number)
 *
 * @param array	$param		Parameter array, see $param_defaults array.
 *
-* @return void
+* @return null
 */
 function phpbb_http_login($param)
 {
@@ -4870,12 +4951,107 @@ function phpbb_http_login($param)
 }
 
 /**
+* Escapes and quotes a string for use as an HTML/XML attribute value.
+*
+* This is a port of Python xml.sax.saxutils quoteattr.
+*
+* The function will attempt to choose a quote character in such a way as to
+* avoid escaping quotes in the string. If this is not possible the string will
+* be wrapped in double quotes and double quotes will be escaped.
+*
+* @param string $data The string to be escaped
+* @param array $entities Associative array of additional entities to be escaped
+* @return string Escaped and quoted string
+*/
+function phpbb_quoteattr($data, $entities = null)
+{
+	$data = str_replace('&', '&amp;', $data);
+	$data = str_replace('>', '&gt;', $data);
+	$data = str_replace('<', '&lt;', $data);
+
+	$data = str_replace("\n", '&#10;', $data);
+	$data = str_replace("\r", '&#13;', $data);
+	$data = str_replace("\t", '&#9;', $data);
+
+	if (!empty($entities))
+	{
+		$data = str_replace(array_keys($entities), array_values($entities), $data);
+	}
+
+	if (strpos($data, '"') !== false)
+	{
+		if (strpos($data, "'") !== false)
+		{
+			$data = '"' . str_replace('"', '&quot;', $data) . '"';
+		}
+		else
+		{
+			$data = "'" . $data . "'";
+		}
+	}
+	else
+	{
+		$data = '"' . $data . '"';
+	}
+
+	return $data;
+}
+
+/**
+* Converts query string (GET) parameters in request into hidden fields.
+*
+* Useful for forwarding GET parameters when submitting forms with GET method.
+*
+* It is possible to omit some of the GET parameters, which is useful if
+* they are specified in the form being submitted.
+*
+* sid is always omitted.
+*
+* @param phpbb_request $request Request object
+* @param array $exclude A list of variable names that should not be forwarded
+* @return string HTML with hidden fields
+*/
+function phpbb_build_hidden_fields_for_query_params($request, $exclude = null)
+{
+	$names = $request->variable_names(phpbb_request_interface::GET);
+	$hidden = '';
+	foreach ($names as $name)
+	{
+		// Sessions are dealt with elsewhere, omit sid always
+		if ($name == 'sid')
+		{
+			continue;
+		}
+
+		// Omit any additional parameters requested
+		if (!empty($exclude) && in_array($name, $exclude))
+		{
+			continue;
+		}
+
+		$escaped_name = phpbb_quoteattr($name);
+
+		// Note: we might retrieve the variable from POST or cookies
+		// here. To avoid exposing cookies, skip variables that are
+		// overwritten somewhere other than GET entirely.
+		$value = $request->variable($name, '', true);
+		$get_value = $request->variable($name, '', true, phpbb_request_interface::GET);
+		if ($value === $get_value)
+		{
+			$escaped_value = phpbb_quoteattr($value);
+			$hidden .= "<input type='hidden' name=$escaped_name value=$escaped_value />";
+		}
+	}
+	return $hidden;
+}
+
+/**
 * Generate page header
 */
 function page_header($page_title = '', $display_online_list = true, $item_id = 0, $item = 'forum')
 {
 	global $db, $config, $template, $SID, $_SID, $_EXTRA_URL, $user, $auth, $phpEx, $phpbb_root_path;
-	global $phpbb_dispatcher;
+	global $phpbb_dispatcher, $request, $phpbb_container;
 
 	if (defined('HEADER_INC'))
 	{
@@ -5064,6 +5240,26 @@ function page_header($page_title = '', $display_online_list = true, $item_id = 0
 		$timezone_name = $user->lang['timezones'][$timezone_name];
 	}
 
+	// Output the notifications
+	$notifications = false;
+	if ($config['load_notifications'] && $user->data['user_id'] != ANONYMOUS && $user->data['user_type'] != USER_IGNORE)
+	{
+		$phpbb_notifications = $phpbb_container->get('notification_manager');
+
+		$notifications = $phpbb_notifications->load_notifications(array(
+			'all_unread'	=> true,
+			'limit'			=> 5,
+		));
+
+		foreach ($notifications['notifications'] as $notification)
+		{
+			$template->assign_block_vars('notifications', $notification->prepare_for_display());
+		}
+	}
+
+	$hidden_fields_for_jumpbox = phpbb_build_hidden_fields_for_query_params($request, array('f'));
+
+
 	// The following assigns all _common_ variables that may be used at any point in a template.
 	$template->assign_vars(array(
 		'SITENAME'						=> $config['sitename'],
@@ -5078,6 +5274,13 @@ function page_header($page_title = '', $display_online_list = true, $item_id = 0
 		'RECORD_USERS'					=> $l_online_record,
 		'PRIVATE_MESSAGE_INFO'			=> $l_privmsgs_text,
 		'PRIVATE_MESSAGE_INFO_UNREAD'	=> $l_privmsgs_text_unread,
+		'HIDDEN_FIELDS_FOR_JUMPBOX'	=> $hidden_fields_for_jumpbox,
+
+		'UNREAD_NOTIFICATIONS_COUNT'	=> ($notifications !== false) ? $notifications['unread_count'] : '',
+		'NOTIFICATIONS_COUNT'			=> ($notifications !== false) ? $user->lang('NOTIFICATIONS_COUNT', $notifications['unread_count']) : '',
+		'U_VIEW_ALL_NOTIFICATIONS'		=> append_sid("{$phpbb_root_path}ucp.$phpEx", 'i=ucp_notifications'),
+		'U_NOTIFICATION_SETTINGS'		=> append_sid("{$phpbb_root_path}ucp.$phpEx", 'i=ucp_notifications&amp;mode=notification_options'),
+		'S_NOTIFICATIONS_DISPLAY'		=> $config['load_notifications'],
 
 		'S_USER_NEW_PRIVMSG'			=> $user->data['user_new_privmsg'],
 		'S_USER_UNREAD_PRIVMSG'			=> $user->data['user_unread_privmsg'],
@@ -5090,7 +5293,7 @@ function page_header($page_title = '', $display_online_list = true, $item_id = 0
 		'BOARD_URL'			=> $board_url,
 
 		'L_LOGIN_LOGOUT'	=> $l_login_logout,
-		'L_INDEX'			=> $user->lang['FORUM_INDEX'],
+		'L_INDEX'			=> ($config['board_index_text'] !== '') ? $config['board_index_text'] : $user->lang['FORUM_INDEX'],
 		'L_SITE_HOME'		=> ($config['site_home_text'] !== '') ? $config['site_home_text'] : $user->lang['HOME'],
 		'L_ONLINE_EXPLAIN'	=> $l_online_time,
 
@@ -5209,11 +5412,15 @@ function page_header($page_title = '', $display_online_list = true, $item_id = 0
 
 /**
 * Generate page footer
+*
+* @param bool $run_cron Whether or not to run the cron
+* @param bool $display_template Whether or not to display the template
+* @param bool $exit_handler Whether or not to run the exit_handler()
 */
-function page_footer($run_cron = true)
+function page_footer($run_cron = true, $display_template = true, $exit_handler = true)
 {
 	global $db, $config, $template, $user, $auth, $cache, $starttime, $phpbb_root_path, $phpEx;
-	global $request, $phpbb_dispatcher;
+	global $request, $phpbb_dispatcher, $phpbb_admin_path;
 
 	// A listener can set this variable to `true` when it overrides this function
 	$page_footer_override = false;
@@ -5269,7 +5476,7 @@ function page_footer($run_cron = true)
 		'TRANSLATION_INFO'		=> (!empty($user->lang['TRANSLATION_INFO'])) ? $user->lang['TRANSLATION_INFO'] : '',
 		'CREDIT_LINE'			=> $user->lang('POWERED_BY', '<a href="https://www.phpbb.com/">phpBB</a>&reg; Forum Software &copy; phpBB Group'),
 
-		'U_ACP' => ($auth->acl_get('a_') && !empty($user->data['is_registered'])) ? append_sid("{$phpbb_root_path}adm/index.$phpEx", false, true, $user->session_id) : '')
+		'U_ACP' => ($auth->acl_get('a_') && !empty($user->data['is_registered'])) ? append_sid("{$phpbb_admin_path}index.$phpEx", false, true, $user->session_id) : '')
 	);
 
 	// Call cron-type script
@@ -5305,10 +5512,17 @@ function page_footer($run_cron = true)
 		}
 	}
 
-	$template->display('body');
+	if ($display_template)
+	{
+		$template->display('body');
+	}
 
 	garbage_collection();
-	exit_handler();
+
+	if ($exit_handler)
+	{
+		exit_handler();
+	}
 }
 
 /**
@@ -5326,7 +5540,10 @@ function garbage_collection()
 	* @event core.garbage_collection
 	* @since 3.1-A1
 	*/
-	$phpbb_dispatcher->dispatch('core.garbage_collection');
+	if (!empty($phpbb_dispatcher))
+	{
+		$phpbb_dispatcher->dispatch('core.garbage_collection');
+	}
 
 	// Unload cache, must be done before the DB connection if closed
 	if (!empty($cache))
@@ -5411,4 +5628,96 @@ function phpbb_pcre_utf8_support()
 function phpbb_to_numeric($input)
 {
 	return ($input > PHP_INT_MAX) ? (float) $input : (int) $input;
+}
+
+/**
+* Convert either 3.0 dbms or 3.1 db driver class name to 3.1 db driver class name.
+*
+* If $dbms is a valid 3.1 db driver class name, returns it unchanged.
+* Otherwise prepends phpbb_db_driver_ to the dbms to convert a 3.0 dbms
+* to 3.1 db driver class name.
+*
+* @param string $dbms dbms parameter
+* @return db driver class
+*/
+function phpbb_convert_30_dbms_to_31($dbms)
+{
+	// Note: this check is done first because mysqli extension
+	// supplies a mysqli class, and class_exists($dbms) would return
+	// true for mysqli class.
+	// However, per the docblock any valid 3.1 driver name should be
+	// recognized by this function, and have priority over 3.0 dbms.
+	if (class_exists('phpbb_db_driver_' . $dbms))
+	{
+		return 'phpbb_db_driver_' . $dbms;
+	}
+
+	if (class_exists($dbms))
+	{
+		// Additionally we could check that $dbms extends phpbb_db_driver.
+		// http://php.net/manual/en/class.reflectionclass.php
+		// Beware of possible performance issues:
+		// http://stackoverflow.com/questions/294582/php-5-reflection-api-performance
+		// We could check for interface implementation in all paths or
+		// only when we do not prepend phpbb_db_driver_.
+
+		/*
+		$reflection = new \ReflectionClass($dbms);
+
+		if ($reflection->isSubclassOf('phpbb_db_driver'))
+		{
+			return $dbms;
+		}
+		*/
+
+		return $dbms;
+	}
+
+	throw new \RuntimeException("You have specified an invalid dbms driver: $dbms");
+}
+
+/**
+* Create a Symfony Request object from phpbb_request object
+*
+* @param phpbb_request $request Request object
+* @return Request A Symfony Request object
+*/
+function phpbb_create_symfony_request(phpbb_request $request)
+{
+	// This function is meant to sanitize the global input arrays
+	$sanitizer = function(&$value, $key) {
+		$type_cast_helper = new phpbb_request_type_cast_helper();
+		$type_cast_helper->set_var($value, $value, gettype($value), true);
+	};
+
+	// We need to re-enable the super globals so we can access them here
+	$request->enable_super_globals();
+	$get_parameters = $_GET;
+	$post_parameters = $_POST;
+	$server_parameters = $_SERVER;
+	$files_parameters = $_FILES;
+	$cookie_parameters = $_COOKIE;
+	// And now disable them again for security
+	$request->disable_super_globals();
+
+	array_walk_recursive($get_parameters, $sanitizer);
+	array_walk_recursive($post_parameters, $sanitizer);
+
+	// Until we fix the issue with relative paths, we have to fake path info
+	// to allow urls like app.php?controller=foo/bar
+	$controller = $request->variable('controller', '');
+	$path_info = '/' . $controller;
+	$request_uri = $server_parameters['REQUEST_URI'];
+
+	// Remove the query string from REQUEST_URI
+	if ($pos = strpos($request_uri, '?'))
+	{
+		$request_uri = substr($request_uri, 0, $pos);
+	}
+
+	// Add the path info (i.e. controller route) to the REQUEST_URI
+	$server_parameters['REQUEST_URI'] = $request_uri . $path_info;
+	$server_parameters['SCRIPT_NAME'] = '';
+
+	return new Request($get_parameters, $post_parameters, array(), $cookie_parameters, $files_parameters, $server_parameters);
 }

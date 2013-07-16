@@ -17,48 +17,36 @@ define('IN_PHPBB', true);
 $phpbb_root_path = (defined('PHPBB_ROOT_PATH')) ? PHPBB_ROOT_PATH : './';
 $phpEx = substr(strrchr(__FILE__, '.'), 1);
 include($phpbb_root_path . 'common.' . $phpEx);
+include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
 
 // Start session management
 $user->session_begin();
 $auth->acl($user->data);
-$user->setup();
+$user->setup('viewforum');
 
-// Handle the display of extension front pages
-if ($ext = $request->variable('ext', ''))
+// Mark notifications read
+if (($mark_notification = $request->variable('mark_notification', 0)))
 {
-	$class = 'phpbb_ext_' . str_replace('/', '_', $ext) . '_controller';
+	$phpbb_notifications = $phpbb_container->get('notification_manager');
 
-	if (!$phpbb_extension_manager->available($ext))
-	{
-		send_status_line(404, 'Not Found');
-		trigger_error($user->lang('EXTENSION_DOES_NOT_EXIST', $ext));	
-	}
-	else if (!$phpbb_extension_manager->enabled($ext))
-	{
-		send_status_line(404, 'Not Found');
-		trigger_error($user->lang('EXTENSION_DISABLED', $ext));
-	}
-	else if (!class_exists($class))
-	{
-		send_status_line(404, 'Not Found');
-		trigger_error($user->lang('EXTENSION_CONTROLLER_MISSING', $ext));
-	}
+	$notification = $phpbb_notifications->load_notifications(array(
+		'notification_id'	=> $mark_notification
+	));
 
-	$controller = new $class;
-
-	if (!($controller instanceof phpbb_extension_controller_interface))
+	if (isset($notification['notifications'][$mark_notification]))
 	{
-		send_status_line(500, 'Internal Server Error');
-		trigger_error($user->lang('EXTENSION_CLASS_WRONG_TYPE', $class));
-	}
+		$notification = $notification['notifications'][$mark_notification];
 
-	$controller->handle();
-	exit_handler();
+		$notification->mark_read();
+
+		if (($redirect = $request->variable('redirect', '')))
+		{
+			redirect(append_sid($phpbb_root_path . $redirect));
+		}
+
+		redirect($notification->get_url());
+	}
 }
-
-include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
-
-$user->add_lang('viewforum');
 
 display_forums('', $config['load_moderators']);
 

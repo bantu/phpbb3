@@ -42,24 +42,24 @@ if (isset($_GET['avatar']))
 	}
 
 	require($phpbb_root_path . 'includes/class_loader.' . $phpEx);
-	require($phpbb_root_path . 'includes/di/processor/interface.' . $phpEx);
-	require($phpbb_root_path . 'includes/di/processor/config.' . $phpEx);
 
-	require($phpbb_root_path . 'includes/db/' . $dbms . '.' . $phpEx);
 	require($phpbb_root_path . 'includes/constants.' . $phpEx);
 	require($phpbb_root_path . 'includes/functions.' . $phpEx);
+	require($phpbb_root_path . 'includes/functions_container.' . $phpEx);
 	require($phpbb_root_path . 'includes/functions_download' . '.' . $phpEx);
 	require($phpbb_root_path . 'includes/utf/utf_tools.' . $phpEx);
 
-	$phpbb_container = new ContainerBuilder();
-	$loader = new YamlFileLoader($phpbb_container, new FileLocator(__DIR__.'/../config'));
-	$loader->load('services.yml');
+	// Setup class loader first
+	$phpbb_class_loader = new phpbb_class_loader('phpbb_', "{$phpbb_root_path}includes/", $phpEx);
+	$phpbb_class_loader->register();
+	$phpbb_class_loader_ext = new phpbb_class_loader('phpbb_ext_', "{$phpbb_root_path}ext/", $phpEx);
+	$phpbb_class_loader_ext->register();
 
-	$processor = new phpbb_di_processor_config($phpbb_root_path . 'config.' . $phpEx, $phpbb_root_path, $phpEx);
-	$processor->process($phpbb_container);
+	// Set up container
+	$phpbb_container = phpbb_create_default_container($phpbb_root_path, $phpEx);
 
-	$phpbb_class_loader = $phpbb_container->get('class_loader');
-	$phpbb_class_loader_ext = $phpbb_container->get('class_loader.ext');
+	$phpbb_class_loader->set_cache($phpbb_container->get('cache.driver'));
+	$phpbb_class_loader_ext->set_cache($phpbb_container->get('cache.driver'));
 
 	// set up caching
 	$cache = $phpbb_container->get('cache');
@@ -67,6 +67,7 @@ if (isset($_GET['avatar']))
 	$phpbb_dispatcher = $phpbb_container->get('dispatcher');
 	$request	= $phpbb_container->get('request');
 	$db			= $phpbb_container->get('dbal.conn');
+	$phpbb_log	= $phpbb_container->get('log');
 
 	// Connect to DB
 	if (!@$db->sql_connect($dbhost, $dbuser, $dbpasswd, $dbname, $dbport, false, false))
@@ -85,15 +86,10 @@ if (isset($_GET['avatar']))
 	$phpbb_extension_manager = $phpbb_container->get('ext.manager');
 	$phpbb_subscriber_loader = $phpbb_container->get('event.subscriber_loader');
 
-	$ids = array_keys($phpbb_container->findTaggedServiceIds('container.processor'));
-	foreach ($ids as $id)
-	{
-		$processor = $phpbb_container->get($id);
-		$processor->process($phpbb_container);
-	}
-
 	// worst-case default
 	$browser = strtolower($request->header('User-Agent', 'msie 6.0'));
+
+	$phpbb_avatar_manager = $phpbb_container->get('avatar.manager');
 
 	$filename = request_var('avatar', '');
 	$avatar_group = false;
@@ -283,7 +279,7 @@ else if ($download_id)
 		phpbb_increment_downloads($db, $attachment['attach_id']);
 	}
 
-	if ($display_cat == ATTACHMENT_CATEGORY_IMAGE && $mode === 'view' && (strpos($attachment['mimetype'], 'image') === 0) && ((strpos(strtolower($user->browser), 'msie') !== false) && (strpos(strtolower($user->browser), 'msie 8.0') === false)))
+	if ($display_cat == ATTACHMENT_CATEGORY_IMAGE && $mode === 'view' && (strpos($attachment['mimetype'], 'image') === 0) && (strpos(strtolower($user->browser), 'msie') !== false) && !phpbb_is_greater_ie_version($user->browser, 7))
 	{
 		wrap_img_in_html(append_sid($phpbb_root_path . 'download/file.' . $phpEx, 'id=' . $attachment['attach_id']), $attachment['real_filename']);
 		file_gc();
@@ -392,7 +388,7 @@ else
 			$disallowed[$attach['extension']] = $attach['extension'];
 			continue;
 		}
-		
+
 		$prefix = '';
 		if ($topic_id)
 		{

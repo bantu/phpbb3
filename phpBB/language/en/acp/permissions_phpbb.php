@@ -102,6 +102,7 @@ $lang = array_merge($lang, array(
 	'acl_u_chgemail'	=> array('lang' => 'Can change email address', 'cat' => 'profile'),
 	'acl_u_chgavatar'	=> array('lang' => 'Can change avatar', 'cat' => 'profile'),
 	'acl_u_chggrp'		=> array('lang' => 'Can change default usergroup', 'cat' => 'profile'),
+	'acl_u_chgprofileinfo'	=> array('lang' => 'Can change profile field information', 'cat' => 'profile'),
 
 	'acl_u_attach'		=> array('lang' => 'Can attach files', 'cat' => 'post'),
 	'acl_u_download'	=> array('lang' => 'Can download files', 'cat' => 'post'),
@@ -151,7 +152,8 @@ $lang = array_merge($lang, array(
 	'acl_f_announce'	=> array('lang' => 'Can post announcements', 'cat' => 'post'),
 	'acl_f_reply'		=> array('lang' => 'Can reply to topics', 'cat' => 'post'),
 	'acl_f_edit'		=> array('lang' => 'Can edit own posts', 'cat' => 'post'),
-	'acl_f_delete'		=> array('lang' => 'Can delete own posts', 'cat' => 'post'),
+	'acl_f_delete'		=> array('lang' => 'Can permanently delete own posts', 'cat' => 'post'),
+	'acl_f_softdelete'  => array('lang' => 'Can soft delete own posts<br /><em>Moderators, who have the approve posts permission, can restore soft deleted posts.</em>', 'cat' => 'post'),
 	'acl_f_ignoreflood' => array('lang' => 'Can ignore flood limit', 'cat' => 'post'),
 	'acl_f_postcount'	=> array('lang' => 'Increment post counter<br /><em>Please note that this setting only affects new posts.</em>', 'cat' => 'post'),
 	'acl_f_noapprove'	=> array('lang' => 'Can post without approval', 'cat' => 'post'),	
@@ -172,8 +174,9 @@ $lang = array_merge($lang, array(
 // Moderator Permissions
 $lang = array_merge($lang, array(
 	'acl_m_edit'		=> array('lang' => 'Can edit posts', 'cat' => 'post_actions'),
-	'acl_m_delete'		=> array('lang' => 'Can delete posts', 'cat' => 'post_actions'),
-	'acl_m_approve'		=> array('lang' => 'Can approve posts', 'cat' => 'post_actions'),
+	'acl_m_delete'		=> array('lang' => 'Can permanently delete posts', 'cat' => 'post_actions'),
+	'acl_m_softdelete'	=> array('lang' => 'Can soft delete posts<br /><em>Moderators, who have the approve posts permission, can restore soft deleted posts.</em>', 'cat' => 'post_actions'),
+	'acl_m_approve'		=> array('lang' => 'Can approve and restore posts', 'cat' => 'post_actions'),
 	'acl_m_report'		=> array('lang' => 'Can close and delete reports', 'cat' => 'post_actions'),
 	'acl_m_chgposter'	=> array('lang' => 'Can change post author', 'cat' => 'post_actions'),
 
