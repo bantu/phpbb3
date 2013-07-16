@@ -79,6 +79,16 @@ services:
         tags:
             - { name: cron.task }
 
+    cron.task.core.tidy_uploads:
+        class: phpbb_cron_task_core_tidy_uploads
+        arguments:
+            - %core.root_path%
+            - @config
+        calls:
+            - [set_name, [cron.task.core.tidy_uploads]]
+        tags:
+            - { name: cron.task }
+
     cron.task.core.tidy_warnings:
         class: phpbb_cron_task_core_tidy_warnings
         arguments:

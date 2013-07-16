@@ -45,13 +45,15 @@ class phpbb_cron_task_core_tidy_uploads extends phpbb_cron_task_base
 	protected $phpbb_root_path;
 
 	/**
-	* Constructor method
+	* Constructor.
+	*
+	* @param string $phpbb_root_path The root path
+	* @param phpbb_config $config The config
 	*/
-	public function __construct()
+	public function __construct($phpbb_root_path, phpbb_config $config)
 	{
-		global $config, $phpbb_root_path;
-		$this->config = $config;
 		$this->phpbb_root_path = $phpbb_root_path;
+		$this->config = $config;
 	}
 
 	/**
