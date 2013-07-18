@@ -30,6 +30,7 @@ class acp_profile
 		global $config, $db, $user, $auth, $template, $cache;
 		global $phpbb_root_path, $phpbb_admin_path, $phpEx, $table_prefix;
 		global $request;
+		global $phpbb_container;
 
 		include($phpbb_root_path . 'includes/functions_posting.' . $phpEx);
 		include($phpbb_root_path . 'includes/functions_user.' . $phpEx);
@@ -245,8 +246,7 @@ class acp_profile
 
 				if ($request->is_ajax())
 				{
-					$json_response = new phpbb_json_response();
-					$json_response->send(array(
+					$phpbb_container->get('json_response')->send(array(
 						'text'	=> $user->lang('DEACTIVATE'),
 					));
 				}
@@ -277,8 +277,7 @@ class acp_profile
 
 				if ($request->is_ajax())
 				{
-					$json_response = new phpbb_json_response();
-					$json_response->send(array(
+					$phpbb_container->get('json_response')->send(array(
 						'text'	=> $user->lang('ACTIVATE'),
 					));
 				}

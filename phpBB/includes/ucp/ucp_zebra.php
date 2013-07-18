@@ -26,6 +26,7 @@ class ucp_zebra
 	function main($id, $mode)
 	{
 		global $config, $db, $user, $auth, $template, $phpbb_root_path, $phpEx, $request, $phpbb_dispatcher;
+		global $phpbb_container;
 
 		$submit	= (isset($_POST['submit']) || isset($_GET['add']) || isset($_GET['remove'])) ? true : false;
 		$s_hidden_fields = '';
@@ -229,16 +230,15 @@ class ucp_zebra
 					{
 						$message = ($updated) ? $user->lang[$l_mode . '_UPDATED'] : implode('<br />', $error);
 						
-						$json_response = new phpbb_json_response;
-						$json_response->send(array(
+						$phpbb_container->get('json_response')->send(array(
 							'success' => $updated,
 							
 							'MESSAGE_TITLE'	=> $user->lang['INFORMATION'],
 							'MESSAGE_TEXT'	=> $message,
 							'REFRESH_DATA'	=> array(
 								'time'	=> 3,
-								'url'		=> $this->u_action
-							)
+								'url'	=> $this->u_action,
+							),
 						));
 					}
 					else if ($updated)

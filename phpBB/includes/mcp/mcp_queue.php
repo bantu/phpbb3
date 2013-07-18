@@ -738,8 +738,7 @@ class mcp_queue
 
 			if ($request->is_ajax())
 			{
-				$json_response = new phpbb_json_response;
-				$json_response->send(array(
+				$phpbb_container->get('json_response')->send(array(
 					'MESSAGE_TITLE'		=> $user->lang['INFORMATION'],
 					'MESSAGE_TEXT'		=> $message,
 					'REFRESH_DATA'		=> null,
@@ -886,8 +885,7 @@ class mcp_queue
 
 			if ($request->is_ajax())
 			{
-				$json_response = new phpbb_json_response;
-				$json_response->send(array(
+				$phpbb_container->get('json_response')->send(array(
 					'MESSAGE_TITLE'		=> $user->lang['INFORMATION'],
 					'MESSAGE_TEXT'		=> $message,
 					'REFRESH_DATA'		=> null,
@@ -1221,8 +1219,7 @@ class mcp_queue
 
 			if ($request->is_ajax())
 			{
-				$json_response = new phpbb_json_response;
-				$json_response->send(array(
+				$phpbb_container->get('json_response')->send(array(
 					'MESSAGE_TITLE'		=> $user->lang['INFORMATION'],
 					'MESSAGE_TEXT'		=> $message,
 					'REFRESH_DATA'		=> null,

@@ -269,8 +269,9 @@ class acp_forums
 
 				if ($request->is_ajax())
 				{
-					$json_response = new phpbb_json_response;
-					$json_response->send(array('success' => ($move_forum_name !== false)));
+					$phpbb_container->get('json_response')->send(array(
+						'success' => $move_forum_name !== false,
+					));
 				}
 
 			break;

@@ -189,6 +189,9 @@ services:
             - %core.php_ext%
             - @cache.driver
 
+    json_response:
+        class: phpbb_json_response
+
     kernel_request_subscriber:
         class: phpbb_event_kernel_request_subscriber
         arguments:

@@ -38,6 +38,7 @@ class acp_modules
 	{
 		global $db, $user, $auth, $template, $module, $request;
 		global $config, $phpbb_admin_path, $phpbb_root_path, $phpEx;
+		global $phpbb_container;
 
 		// Set a global define for modules we might include (the author is able to prevent execution of code by checking this constant)
 		define('MODULE_INCLUDE', true);
@@ -375,8 +376,7 @@ class acp_modules
 		{
 			if ($request->is_ajax())
 			{
-				$json_response = new phpbb_json_response;
-				$json_response->send(array(
+				$phpbb_container->get('json_response')->send(array(
 					'MESSAGE_TITLE'	=> $user->lang('ERROR'),
 					'MESSAGE_TEXT'	=> implode('<br />', $errors),
 				));

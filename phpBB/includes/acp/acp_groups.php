@@ -943,8 +943,9 @@ class acp_groups
 
 		if (($action == 'move_up' || $action == 'move_down') && $request->is_ajax())
 		{
-			$json_response = new phpbb_json_response;
-			$json_response->send(array('success' => true));
+			$phpbb_container->get('json_response')->send(array(
+				'success' => true,
+			));
 		}
 
 		$sql = 'SELECT group_id, group_name, group_colour, group_type, group_legend

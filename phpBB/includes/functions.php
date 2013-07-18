@@ -3088,6 +3088,7 @@ function confirm_box($check, $title = '', $hidden = '', $html_body = 'confirm_bo
 {
 	global $user, $template, $db, $request;
 	global $phpEx, $phpbb_root_path, $request;
+	global $phpbb_container;
 
 	if (isset($_POST['cancel']))
 	{
@@ -3171,15 +3172,14 @@ function confirm_box($check, $title = '', $hidden = '', $html_body = 'confirm_bo
 	if ($request->is_ajax())
 	{
 		$u_action .= '&confirm_uid=' . $user->data['user_id'] . '&sess=' . $user->session_id . '&sid=' . $user->session_id;
-		$json_response = new phpbb_json_response;
-		$json_response->send(array(
+		$phpbb_container->get('json_response')->send(array(
 			'MESSAGE_BODY'		=> $template->assign_display('body'),
 			'MESSAGE_TITLE'		=> (!isset($user->lang[$title])) ? $user->lang['CONFIRM'] : $user->lang[$title],
 			'MESSAGE_TEXT'		=> (!isset($user->lang[$title . '_CONFIRM'])) ? $title : $user->lang[$title . '_CONFIRM'],
 
 			'YES_VALUE'			=> $user->lang['YES'],
 			'S_CONFIRM_ACTION'	=> str_replace('&amp;', '&', $u_action), //inefficient, rewrite whole function
-			'S_HIDDEN_FIELDS'	=> $hidden . $s_hidden_fields
+			'S_HIDDEN_FIELDS'	=> $hidden . $s_hidden_fields,
 		));
 	}
 
@@ -4189,6 +4189,7 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 {
 	global $cache, $db, $auth, $template, $config, $user, $request;
 	global $phpEx, $phpbb_root_path, $msg_title, $msg_long_text;
+	global $phpbb_container;
 
 	// Do not display notices if we suppress them via @
 	if (error_reporting() == 0 && $errno != E_USER_ERROR && $errno != E_USER_WARNING && $errno != E_USER_NOTICE)
@@ -4390,13 +4391,12 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 			{
 				global $refresh_data;
 
-				$json_response = new phpbb_json_response;
-				$json_response->send(array(
+				$phpbb_container->get('json_response')->send(array(
 					'MESSAGE_TITLE'		=> $msg_title,
 					'MESSAGE_TEXT'		=> $msg_text,
-					'S_USER_WARNING'	=> ($errno == E_USER_WARNING) ? true : false,
-					'S_USER_NOTICE'		=> ($errno == E_USER_NOTICE) ? true : false,
-					'REFRESH_DATA'		=> (!empty($refresh_data)) ? $refresh_data : null
+					'S_USER_WARNING'	=> $errno == E_USER_WARNING,
+					'S_USER_NOTICE'		=> $errno == E_USER_NOTICE,
+					'REFRESH_DATA'		=> (!empty($refresh_data)) ? $refresh_data : null,
 				));
 			}
 
