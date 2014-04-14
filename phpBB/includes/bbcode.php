@@ -2,9 +2,8 @@
 /**
 *
 * @package phpBB3
-* @version $Id$
 * @copyright (c) 2005 phpBB Group
-* @license http://opensource.org/licenses/gpl-license.php GNU Public License
+* @license http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
 *
 */
 
@@ -30,7 +29,6 @@ class bbcode
 	var $bbcodes = array();
 
 	var $template_bitfield;
-	var $template_filename = '';
 
 	/**
 	* Constructor
@@ -128,28 +126,16 @@ class bbcode
 	*/
 	function bbcode_cache_init()
 	{
-		global $phpbb_root_path, $template, $user;
+		global $phpbb_root_path, $phpEx, $config, $user, $phpbb_extension_manager, $phpbb_path_helper;
 
 		if (empty($this->template_filename))
 		{
-			$this->template_bitfield = new bitfield($user->theme['bbcode_bitfield']);
-			$this->template_filename = $phpbb_root_path . 'styles/' . $user->theme['template_path'] . '/template/bbcode.html';
+			$this->template_bitfield = new bitfield($user->style['bbcode_bitfield']);
 
-			if (!@file_exists($this->template_filename))
-			{
-				if (isset($user->theme['template_inherits_id']) && $user->theme['template_inherits_id'])
-				{
-					$this->template_filename = $phpbb_root_path . 'styles/' . $user->theme['template_inherit_path'] . '/template/bbcode.html';
-					if (!@file_exists($this->template_filename))
-					{
-						trigger_error('The file ' . $this->template_filename . ' is missing.', E_USER_ERROR);
-					}
-				}
-				else
-				{
-					trigger_error('The file ' . $this->template_filename . ' is missing.', E_USER_ERROR);
-				}
-			}
+			$template = new phpbb\template\twig\twig($phpbb_path_helper, $config, $user, new phpbb\template\context(), $phpbb_extension_manager);
+			$template->set_style();
+			$template->set_filenames(array('bbcode.html' => 'bbcode.html'));
+			$this->template_filename = $template->get_source_file_for_handle('bbcode.html');
 		}
 
 		$bbcode_ids = $rowset = $sql = array();
@@ -376,7 +362,7 @@ class bbcode
 						}
 
 						// Replace {L_*} lang strings
-						$bbcode_tpl = preg_replace('/{L_([A-Z_]+)}/e', "(!empty(\$user->lang['\$1'])) ? \$user->lang['\$1'] : ucwords(strtolower(str_replace('_', ' ', '\$1')))", $bbcode_tpl);
+						$bbcode_tpl = preg_replace('/{L_([A-Z0-9_]+)}/e', "(!empty(\$user->lang['\$1'])) ? \$user->lang['\$1'] : ucwords(strtolower(str_replace('_', ' ', '\$1')))", $bbcode_tpl);
 
 						if (!empty($rowset[$bbcode_id]['second_pass_replace']))
 						{
@@ -418,7 +404,7 @@ class bbcode
 				'i_close'	=> '</span>',
 				'u_open'	=> '<span style="text-decoration: underline">',
 				'u_close'	=> '</span>',
-				'img'		=> '<img src="$1" alt="' . $user->lang['IMAGE'] . '" />',
+				'img'		=> '<img src="$1" class="postimage" alt="' . $user->lang['IMAGE'] . '" />',
 				'size'		=> '<span style="font-size: $1%; line-height: normal">$2</span>',
 				'color'		=> '<span style="color: $1">$2</span>',
 				'email'		=> '<a href="mailto:$1">$2</a>'
@@ -480,7 +466,7 @@ class bbcode
 			'email'					=> array('{EMAIL}'		=> '$1', '{DESCRIPTION}'	=> '$2')
 		);
 
-		$tpl = preg_replace('/{L_([A-Z_]+)}/e', "(!empty(\$user->lang['\$1'])) ? \$user->lang['\$1'] : ucwords(strtolower(str_replace('_', ' ', '\$1')))", $tpl);
+		$tpl = preg_replace('/{L_([A-Z0-9_]+)}/e', "(!empty(\$user->lang['\$1'])) ? \$user->lang['\$1'] : ucwords(strtolower(str_replace('_', ' ', '\$1')))", $tpl);
 
 		if (!empty($replacements[$tpl_name]))
 		{
@@ -605,5 +591,3 @@ class bbcode
 		return $code;
 	}
 }
-
-?>

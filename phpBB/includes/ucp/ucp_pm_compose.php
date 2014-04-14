@@ -2,9 +2,8 @@
 /**
 *
 * @package ucp
-* @version $Id$
 * @copyright (c) 2005 phpBB Group
-* @license http://opensource.org/licenses/gpl-license.php GNU Public License
+* @license http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
 *
 */
 
@@ -22,8 +21,10 @@ if (!defined('IN_PHPBB'))
 */
 function compose_pm($id, $mode, $action, $user_folders = array())
 {
-	global $template, $db, $auth, $user;
+	global $template, $db, $auth, $user, $cache;
 	global $phpbb_root_path, $phpEx, $config;
+	global $request;
+	global $phpbb_container;
 
 	// Damn php and globals - i know, this is horrible
 	// Needed for handle_message_list_actions()
@@ -49,13 +50,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 	// Reply to all triggered (quote/reply)
 	$reply_to_all	= request_var('reply_to_all', 0);
 
-	// Do NOT use request_var or specialchars here
-	$address_list	= isset($_REQUEST['address_list']) ? $_REQUEST['address_list'] : array();
-
-	if (!is_array($address_list))
-	{
-		$address_list = array();
-	}
+	$address_list	= $request->variable('address_list', array('' => array(0 => '')));
 
 	$submit		= (isset($_POST['post'])) ? true : false;
 	$preview	= (isset($_POST['preview'])) ? true : false;
@@ -271,19 +266,16 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 			// Passworded forum?
 			if ($post['forum_id'])
 			{
-				$sql = 'SELECT forum_password
+				$sql = 'SELECT forum_id, forum_name, forum_password
 					FROM ' . FORUMS_TABLE . '
 					WHERE forum_id = ' . (int) $post['forum_id'];
 				$result = $db->sql_query($sql);
-				$forum_password = (string) $db->sql_fetchfield('forum_password');
+				$forum_data = $db->sql_fetchrow($result);
 				$db->sql_freeresult($result);
 
-				if ($forum_password)
+				if (!empty($forum_data['forum_password']))
 				{
-					login_forum_box(array(
-						'forum_id'			=> $post['forum_id'],
-						'forum_password'	=> $forum_password,
-					));
+					login_forum_box($forum_data);
 				}
 			}
 		}
@@ -359,7 +351,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 		$message_attachment = 0;
 		$message_text = $message_subject = '';
 
-		if ($to_user_id && $action == 'post')
+		if ($to_user_id && $to_user_id != ANONYMOUS && $action == 'post')
 		{
 			$address_list['u'][$to_user_id] = 'to';
 		}
@@ -394,6 +386,8 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 	}
 
 	$message_parser = new parse_message();
+	$plupload = $phpbb_container->get('plupload');
+	$message_parser->set_plupload($plupload);
 
 	$message_parser->message = ($action == 'reply') ? '' : $message_text;
 	unset($message_text);
@@ -755,7 +749,8 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 			$return_box_lang = ($action === 'post' || $action === 'edit') ? 'PM_OUTBOX' : 'PM_INBOX';
 
 
-			$message = $user->lang['MESSAGE_STORED'] . '<br /><br />' . sprintf($user->lang['VIEW_PRIVATE_MESSAGE'], '<a href="' . $return_message_url . '">', '</a>');
+			$save_message = ($action === 'edit') ? $user->lang['MESSAGE_EDITED'] : $user->lang['MESSAGE_STORED'];
+			$message = $save_message . '<br /><br />' . $user->lang('VIEW_PRIVATE_MESSAGE', '<a href="' . $return_message_url . '">', '</a>');
 
 			$last_click_type = 'CLICK_RETURN_FOLDER';
 			if ($folder_url)
@@ -843,11 +838,11 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 			$post_id = request_var('p', 0);
 			if ($config['allow_post_links'])
 			{
-				$message_link = "[url=" . generate_board_url() . "/viewtopic.$phpEx?p={$post_id}#p{$post_id}]{$user->lang['SUBJECT']}: {$message_subject}[/url]\n\n";
+				$message_link = "[url=" . generate_board_url() . "/viewtopic.$phpEx?p={$post_id}#p{$post_id}]{$user->lang['SUBJECT']}{$user->lang['COLON']} {$message_subject}[/url]\n\n";
 			}
 			else
 			{
-				$message_link = $user->lang['SUBJECT'] . ': ' . $message_subject . " (" . generate_board_url() . "/viewtopic.$phpEx?p={$post_id}#p{$post_id})\n\n";
+				$message_link = $user->lang['SUBJECT'] . $user->lang['COLON'] . ' ' . $message_subject . " (" . generate_board_url() . "/viewtopic.$phpEx?p={$post_id}#p{$post_id})\n\n";
 			}
 		}
 		else
@@ -880,7 +875,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 		$forward_text[] = sprintf($user->lang['FWD_SUBJECT'], censor_text($message_subject));
 		$forward_text[] = sprintf($user->lang['FWD_DATE'], $user->format_date($message_time, false, true));
 		$forward_text[] = sprintf($user->lang['FWD_FROM'], $quote_username_text);
-		$forward_text[] = sprintf($user->lang['FWD_TO'], implode(', ', $fwd_to_field['to']));
+		$forward_text[] = sprintf($user->lang['FWD_TO'], implode($user->lang['COMMA_SEPARATOR'], $fwd_to_field['to']));
 
 		$message_parser->message = implode("\n", $forward_text) . "\n\n[quote=&quot;{$quote_username}&quot;]\n" . censor_text(trim($message_parser->message)) . "\n[/quote]";
 		$message_subject = ((!preg_match('/^Fwd:/', $message_subject)) ? 'Fwd: ' : '') . censor_text($message_subject);
@@ -1050,7 +1045,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 
 	$s_hidden_fields = '<input type="hidden" name="lastclick" value="' . $current_time . '" />';
 	$s_hidden_fields .= (isset($check_value)) ? '<input type="hidden" name="status_switch" value="' . $check_value . '" />' : '';
-	$s_hidden_fields .= ($draft_id || isset($_REQUEST['draft_loaded'])) ? '<input type="hidden" name="draft_loaded" value="' . ((isset($_REQUEST['draft_loaded'])) ? intval($_REQUEST['draft_loaded']) : $draft_id) . '" />' : '';
+	$s_hidden_fields .= ($draft_id || isset($_REQUEST['draft_loaded'])) ? '<input type="hidden" name="draft_loaded" value="' . ((isset($_REQUEST['draft_loaded'])) ? $request->variable('draft_loaded', 0) : $draft_id) . '" />' : '';
 
 	$form_enctype = (@ini_get('file_uploads') == '0' || strtolower(@ini_get('file_uploads')) == 'off' || !$config['allow_pm_attach'] || !$auth->acl_get('u_pm_attach')) ? '' : ' enctype="multipart/form-data"';
 
@@ -1058,7 +1053,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 	$template->assign_vars(array(
 		'L_POST_A'					=> $page_title,
 		'L_ICON'					=> $user->lang['PM_ICON'],
-		'L_MESSAGE_BODY_EXPLAIN'	=> (intval($config['max_post_chars'])) ? sprintf($user->lang['MESSAGE_BODY_EXPLAIN'], intval($config['max_post_chars'])) : '',
+		'L_MESSAGE_BODY_EXPLAIN'	=> $user->lang('MESSAGE_BODY_EXPLAIN', (int) $config['max_post_chars']),
 
 		'SUBJECT'				=> (isset($message_subject)) ? $message_subject : '',
 		'MESSAGE'				=> $message_text,
@@ -1086,6 +1081,7 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 		'S_SAVE_ALLOWED'		=> ($auth->acl_get('u_savedrafts') && $action != 'edit') ? true : false,
 		'S_HAS_DRAFTS'			=> ($auth->acl_get('u_savedrafts') && $drafts),
 		'S_FORM_ENCTYPE'		=> $form_enctype,
+		'S_ATTACH_DATA'			=> json_encode($message_parser->attachment_data),
 
 		'S_BBCODE_IMG'			=> $img_status,
 		'S_BBCODE_FLASH'		=> $flash_status,
@@ -1107,6 +1103,12 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 	// Show attachment box for adding attachments if true
 	$allowed = ($auth->acl_get('u_pm_attach') && $config['allow_pm_attach'] && $form_enctype);
 
+	if ($allowed)
+	{
+		$max_files = ($auth->acl_gets('a_', 'm_')) ? 0 : (int) $config['max_attachments_pm'];
+		$plupload->configure($cache, $template, $s_action, false, $max_files);
+	}
+
 	// Attachment entry
 	posting_gen_attachment_entry($attachment_data, $filename_data, $allowed);
 
@@ -1126,11 +1128,12 @@ function compose_pm($id, $mode, $action, $user_folders = array())
 function handle_message_list_actions(&$address_list, &$error, $remove_u, $remove_g, $add_to, $add_bcc)
 {
 	global $auth, $db, $user;
+	global $request;
 
 	// Delete User [TO/BCC]
-	if ($remove_u && !empty($_REQUEST['remove_u']) && is_array($_REQUEST['remove_u']))
+	if ($remove_u && $request->variable('remove_u', array(0 => '')))
 	{
-		$remove_user_id = array_keys($_REQUEST['remove_u']);
+		$remove_user_id = array_keys($request->variable('remove_u', array(0 => '')));
 
 		if (isset($remove_user_id[0]))
 		{
@@ -1139,9 +1142,9 @@ function handle_message_list_actions(&$address_list, &$error, $remove_u, $remove
 	}
 
 	// Delete Group [TO/BCC]
-	if ($remove_g && !empty($_REQUEST['remove_g']) && is_array($_REQUEST['remove_g']))
+	if ($remove_g && $request->variable('remove_g', array(0 => '')))
 	{
-		$remove_group_id = array_keys($_REQUEST['remove_g']);
+		$remove_group_id = array_keys($request->variable('remove_g', array(0 => '')));
 
 		if (isset($remove_group_id[0]))
 		{
@@ -1209,7 +1212,7 @@ function handle_message_list_actions(&$address_list, &$error, $remove_u, $remove
 		}
 
 		// Add Friends if specified
-		$friend_list = (isset($_REQUEST['add_' . $type]) && is_array($_REQUEST['add_' . $type])) ? array_map('intval', array_keys($_REQUEST['add_' . $type])) : array();
+		$friend_list = array_keys($request->variable('add_' . $type, array(0)));
 		$user_id_ary = array_merge($user_id_ary, $friend_list);
 
 		foreach ($user_id_ary as $user_id)
@@ -1307,5 +1310,3 @@ function get_recipients($address_list, $num_recipients = 1)
 
 	return $recipient;
 }
-
-?>

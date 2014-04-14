@@ -2,9 +2,8 @@
 /**
 *
 * @package install
-* @version $Id$
 * @copyright (c) 2006 phpBB Group
-* @license http://opensource.org/licenses/gpl-license.php GNU Public License
+* @license http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
 *
 * @todo check for writable cache/store/files directory
 */
@@ -20,16 +19,7 @@ if (!defined('IN_INSTALL'))
 if (!empty($setmodules))
 {
 	// If phpBB is not installed we do not include this module
-	if (@file_exists($phpbb_root_path . 'config.' . $phpEx) && !@file_exists($phpbb_root_path . 'cache/install_lock'))
-	{
-		include_once($phpbb_root_path . 'config.' . $phpEx);
-
-		if (!defined('PHPBB_INSTALLED'))
-		{
-			return;
-		}
-	}
-	else
+	if (!phpbb_check_installation_exists($phpbb_root_path, $phpEx) || file_exists($phpbb_root_path . 'cache/install_lock'))
 	{
 		return;
 	}
@@ -40,7 +30,7 @@ if (!empty($setmodules))
 		'module_filename'	=> substr(basename(__FILE__), 0, -strlen($phpEx)-1),
 		'module_order'		=> 30,
 		'module_subs'		=> '',
-		'module_stages'		=> array('INTRO', 'VERSION_CHECK', 'UPDATE_DB', 'FILE_CHECK', 'UPDATE_FILES'),
+		'module_stages'		=> array('INTRO', 'VERSION_CHECK', 'FILE_CHECK', 'UPDATE_FILES', 'UPDATE_DB'),
 		'module_reqs'		=> ''
 	);
 }
@@ -58,7 +48,6 @@ class install_update extends module
 	var $new_location;
 	var $latest_version;
 	var $current_version;
-	var $unequal_version;
 
 	var $update_to_version;
 
@@ -73,17 +62,34 @@ class install_update extends module
 	function main($mode, $sub)
 	{
 		global $template, $phpEx, $phpbb_root_path, $user, $db, $config, $cache, $auth, $language;
+		global $request, $phpbb_admin_path, $phpbb_adm_relative_path, $phpbb_container;
+
+		// We must enable super globals, otherwise creating a new instance of the request class,
+		// using the new container with a dbal connection will fail with the following PHP Notice:
+		// Object of class phpbb_request_deactivated_super_global could not be converted to int
+		$request->enable_super_globals();
+
+		// Create a normal container now
+		if (file_exists($phpbb_root_path . 'install/update/new/config'))
+		{
+			$phpbb_container = phpbb_create_update_container($phpbb_root_path, $phpEx, $phpbb_root_path . 'install/update/new/config');
+		}
+		else
+		{
+			$phpbb_container = phpbb_create_update_container($phpbb_root_path, $phpEx, $phpbb_root_path . 'config');
+		}
+
+		// Writes into global $cache
+		$cache = $phpbb_container->get('cache');
 
 		$this->tpl_name = 'install_update';
 		$this->page_title = 'UPDATE_INSTALLATION';
-		$this->unequal_version = false;
 
 		$this->old_location = $phpbb_root_path . 'install/update/old/';
 		$this->new_location = $phpbb_root_path . 'install/update/new/';
 
 		// Init DB
 		require($phpbb_root_path . 'config.' . $phpEx);
-		require($phpbb_root_path . 'includes/db/' . $dbms . '.' . $phpEx);
 		require($phpbb_root_path . 'includes/constants.' . $phpEx);
 
 		// Special options for conflicts/modified files
@@ -92,7 +98,9 @@ class install_update extends module
 		define('MERGE_NEW_FILE', 3);
 		define('MERGE_MOD_FILE', 4);
 
-		$db = new $sql_db();
+		$dbms = phpbb_convert_30_dbms_to_31($dbms);
+
+		$db = new $dbms();
 
 		// Connect to DB
 		$db->sql_connect($dbhost, $dbuser, $dbpasswd, $dbname, $dbport, false, false);
@@ -100,17 +108,10 @@ class install_update extends module
 		// We do not need this any longer, unset for safety purposes
 		unset($dbpasswd);
 
-		$config = array();
-
-		$sql = 'SELECT config_name, config_value
-			FROM ' . CONFIG_TABLE;
-		$result = $db->sql_query($sql);
-
-		while ($row = $db->sql_fetchrow($result))
-		{
-			$config[$row['config_name']] = $row['config_value'];
-		}
-		$db->sql_freeresult($result);
+		// We need to fill the config to let internal functions correctly work
+		$config = new \phpbb\config\db($db, new \phpbb\cache\driver\null, CONFIG_TABLE);
+		set_config(null, null, null, $config);
+		set_config_count(null, null, null, $config);
 
 		// Force template recompile
 		$config['load_tplcompile'] = 1;
@@ -125,7 +126,7 @@ class install_update extends module
 		$config['default_lang'] = $language;
 		$user->data['user_lang'] = $language;
 
-		$user->setup(array('common', 'acp/common', 'acp/board', 'install', 'posting'));
+		$user->add_lang(array('common', 'acp/common', 'acp/board', 'install', 'posting'));
 
 		// Reset the default_lang
 		$config['default_lang'] = $config_default_lang;
@@ -138,10 +139,9 @@ class install_update extends module
 		}
 
 		// Set custom template again. ;)
-		$template->set_custom_template('../adm/style', 'admin');
-
-		// still, the acp template is never stored in the database
-		$user->theme['template_storedb'] = false;
+		$paths = array($phpbb_root_path . 'install/update/new/adm/style', $phpbb_admin_path . 'style');
+		$paths = array_filter($paths, 'is_dir');
+		$template->set_custom_style('adm', $paths);
 
 		$template->assign_vars(array(
 			'S_USER_LANG'			=> $user->lang['USER_LANG'],
@@ -152,14 +152,23 @@ class install_update extends module
 		));
 
 		// Get current and latest version
-		if (($latest_version = $cache->get('_version_info')) === false)
+		$version_helper = $phpbb_container->get('version_helper');
+		try
 		{
-			$this->latest_version = $this->get_file('version_info');
-			$cache->put('_version_info', $this->latest_version);
+			$this->latest_version = $version_helper->get_latest_on_current_branch(true);
 		}
-		else
+		catch (\RuntimeException $e)
 		{
-			$this->latest_version = $latest_version;
+			$this->latest_version = false;
+
+			$update_info = array();
+			include($phpbb_root_path . 'install/update/index.' . $phpEx);
+			$info = (empty($update_info) || !is_array($update_info)) ? false : $update_info;
+
+			if ($info !== false)
+			{
+				$this->latest_version = (!empty($info['version']['to'])) ? trim($info['version']['to']) : false;
+			}
 		}
 
 		// For the current version we trick a bit. ;)
@@ -195,8 +204,6 @@ class install_update extends module
 		// Check if the update files are actually meant to update from the current version
 		if ($this->current_version != $this->update_info['version']['from'])
 		{
-			$this->unequal_version = true;
-
 			$template->assign_vars(array(
 				'S_ERROR'	=> true,
 				'ERROR_MSG'	=> sprintf($user->lang['INCOMPATIBLE_UPDATE_FILES'], $this->current_version, $this->update_info['version']['from'], $this->update_info['version']['to']),
@@ -204,10 +211,8 @@ class install_update extends module
 		}
 
 		// Check if the update files stored are for the latest version...
-		if ($this->latest_version != $this->update_info['version']['to'])
+		if (version_compare(strtolower($this->latest_version), strtolower($this->update_info['version']['to']), '>'))
 		{
-			$this->unequal_version = true;
-
 			$template->assign_vars(array(
 				'S_WARNING'		=> true,
 				'WARNING_MSG'	=> sprintf($user->lang['OLD_UPDATE_FILES'], $this->update_info['version']['from'], $this->update_info['version']['to'], $this->latest_version))
@@ -225,14 +230,15 @@ class install_update extends module
 
 		if ($this->test_update === false)
 		{
-			// Got the updater template itself updated? If so, we are able to directly use it - but only if all three files are present
-			if (in_array('adm/style/install_update.html', $this->update_info['files']))
-			{
-				$this->tpl_name = '../../install/update/new/adm/style/install_update';
-			}
-
 			// What about the language file? Got it updated?
-			if (in_array('language/en/install.' . $phpEx, $this->update_info['files']))
+			if (in_array('language/' . $language . '/install.' . $phpEx, $this->update_info['files']))
+			{
+				$lang = array();
+				include($this->new_location . 'language/' . $language . '/install.' . $phpEx);
+				// this is the user's language.. just merge it
+				$user->lang = array_merge($user->lang, $lang);
+			}
+			if ($language != 'en' && in_array('language/en/install.' . $phpEx, $this->update_info['files']))
 			{
 				$lang = array();
 				include($this->new_location . 'language/en/install.' . $phpEx);
@@ -251,7 +257,7 @@ class install_update extends module
 		$this->include_file('includes/diff/renderer.' . $phpEx);
 
 		// Make sure we stay at the file check if checking the files again
-		if (!empty($_POST['check_again']))
+		if ($request->variable('check_again', false, false, \phpbb\request\request_interface::POST))
 		{
 			$sub = $this->p_master->sub = 'file_check';
 		}
@@ -276,18 +282,17 @@ class install_update extends module
 				$this->page_title = 'STAGE_VERSION_CHECK';
 
 				$template->assign_vars(array(
-					'S_UP_TO_DATE'		=> $up_to_date,
 					'S_VERSION_CHECK'	=> true,
 
-					'U_ACTION'				=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=file_check"),
-					'U_DB_UPDATE_ACTION'	=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=update_db"),
+					'U_ACTION'			=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=file_check"),
 
+					'S_UP_TO_DATE'		=> $up_to_date,
 					'LATEST_VERSION'	=> $this->latest_version,
-					'CURRENT_VERSION'	=> $this->current_version)
-				);
+					'CURRENT_VERSION'	=> $this->current_version,
+				));
 
 				// Print out version the update package updates to
-				if ($this->unequal_version)
+				if ($this->latest_version != $this->update_info['version']['to'])
 				{
 					$template->assign_var('PACKAGE_VERSION', $this->update_info['version']['to']);
 				}
@@ -305,30 +310,6 @@ class install_update extends module
 			break;
 
 			case 'update_db':
-
-				// Make sure the database update is valid for the latest version
-				$valid = false;
-				$updates_to_version = '';
-
-				if (file_exists($phpbb_root_path . 'install/database_update.' . $phpEx))
-				{
-					include_once($phpbb_root_path . 'install/database_update.' . $phpEx);
-
-					if ($updates_to_version === $this->update_info['version']['to'])
-					{
-						$valid = true;
-					}
-				}
-
-				// Should not happen at all
-				if (!$valid)
-				{
-					trigger_error($user->lang['DATABASE_UPDATE_INFO_OLD'], E_USER_ERROR);
-				}
-
-				// Just a precaution
-				$cache->purge();
-
 				// Redirect the user to the database update script with some explanations...
 				$template->assign_vars(array(
 					'S_DB_UPDATE'			=> true,
@@ -336,8 +317,14 @@ class install_update extends module
 					'U_DB_UPDATE'			=> append_sid($phpbb_root_path . 'install/database_update.' . $phpEx, 'type=1&amp;language=' . $user->data['user_lang']),
 					'U_DB_UPDATE_ACTION'	=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=update_db"),
 					'U_ACTION'				=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=file_check"),
+					'L_EVERYTHING_UP_TO_DATE'	=> $user->lang('EVERYTHING_UP_TO_DATE', append_sid("{$phpbb_root_path}ucp.$phpEx", 'mode=login'), append_sid("{$phpbb_root_path}ucp.$phpEx", 'mode=login&amp;redirect=' . $phpbb_adm_relative_path . 'index.php%3Fi=send_statistics%26mode=send_statistics')),
 				));
 
+				// Do not display incompatible package note after successful update
+				if ($config['version'] == $this->update_info['version']['to'])
+				{
+					$template->assign_var('S_ERROR', false);
+				}
 			break;
 
 			case 'file_check':
@@ -358,8 +345,8 @@ class install_update extends module
 				$action = request_var('action', '');
 
 				// We are directly within an update. To make sure our update list is correct we check its status.
-				$update_list = (!empty($_POST['check_again'])) ? false : $cache->get('_update_list');
-				$modified = ($update_list !== false) ? @filemtime($cache->cache_dir . 'data_update_list.' . $phpEx) : 0;
+				$update_list = ($request->variable('check_again', false, false, \phpbb\request\request_interface::POST)) ? false : $cache->get('_update_list');
+				$modified = ($update_list !== false) ? @filemtime($cache->get_driver()->cache_dir . 'data_update_list.' . $phpEx) : 0;
 
 				// Make sure the list is up-to-date
 				if ($update_list !== false)
@@ -504,65 +491,29 @@ class install_update extends module
 					'S_FILE_CHECK'			=> true,
 					'S_ALL_UP_TO_DATE'		=> $all_up_to_date,
 					'S_VERSION_UP_TO_DATE'	=> $up_to_date,
+					'S_UP_TO_DATE'			=> $up_to_date,
 					'U_ACTION'				=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=file_check"),
 					'U_UPDATE_ACTION'		=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=update_files"),
 					'U_DB_UPDATE_ACTION'	=> append_sid($this->p_master->module_url, "language=$language&amp;mode=$mode&amp;sub=update_db"),
 				));
 
+				// Since some people try to update to RC releases, but phpBB.com tells them the last version is the version they currently run
+				// we are faced with the updater thinking the database schema is up-to-date; which it is, but should be updated none-the-less
+				// We now try to cope with this by triggering the update process
+				if (version_compare(str_replace('rc', 'RC', strtolower($this->current_version)), str_replace('rc', 'RC', strtolower($this->update_info['version']['to'])), '<'))
+				{
+					$template->assign_vars(array(
+						'S_UP_TO_DATE'		=> false,
+					));
+				}
+
 				if ($all_up_to_date)
 				{
+					global $phpbb_container;
+					$phpbb_log = $phpbb_container->get('log');
+
 					// Add database update to log
-					add_log('admin', 'LOG_UPDATE_PHPBB', $this->current_version, $this->update_to_version);
-
-					// Refresh prosilver css data - this may cause some unhappy users, but
-					$sql = 'SELECT *
-						FROM ' . STYLES_THEME_TABLE . "
-						WHERE LOWER(theme_name) = 'prosilver'";
-					$result = $db->sql_query($sql);
-					$theme = $db->sql_fetchrow($result);
-					$db->sql_freeresult($result);
-
-					if ($theme)
-					{
-						$recache = (empty($theme['theme_data'])) ? true : false;
-						$update_time = time();
-
-						// We test for stylesheet.css because it is faster and most likely the only file changed on common themes
-						if (!$recache && $theme['theme_mtime'] < @filemtime("{$phpbb_root_path}styles/" . $theme['theme_path'] . '/theme/stylesheet.css'))
-						{
-							$recache = true;
-							$update_time = @filemtime("{$phpbb_root_path}styles/" . $theme['theme_path'] . '/theme/stylesheet.css');
-						}
-						else if (!$recache)
-						{
-							$last_change = $theme['theme_mtime'];
-							$dir = @opendir("{$phpbb_root_path}styles/{$theme['theme_path']}/theme");
-
-							if ($dir)
-							{
-								while (($entry = readdir($dir)) !== false)
-								{
-									if (substr(strrchr($entry, '.'), 1) == 'css' && $last_change < @filemtime("{$phpbb_root_path}styles/{$theme['theme_path']}/theme/{$entry}"))
-									{
-										$recache = true;
-										break;
-									}
-								}
-								closedir($dir);
-							}
-						}
-
-						if ($recache)
-						{
-							// Instead of re-caching here, we simply remove theme_data... HAR HAR HAR (think about a carribean pirate)
-							$sql = 'UPDATE ' . STYLES_THEME_TABLE . " SET theme_data = ''
-								WHERE theme_id = " . $theme['theme_id'];
-							$db->sql_query($sql);
-
-							$cache->destroy('sql', STYLES_THEME_TABLE);
-							$cache->destroy('sql', STYLES_TABLE);
-						}
-					}
+					$phpbb_log->add('admin', $user->data['user_id'], $user->ip, 'LOG_UPDATE_PHPBB', time(), array($this->current_version, $this->update_to_version));
 
 					$db->sql_return_on_error(true);
 					$db->sql_query('DELETE FROM ' . CONFIG_TABLE . " WHERE config_name = 'version_update_from'");
@@ -714,7 +665,7 @@ class install_update extends module
 							{
 								$cache->put('_diff_files', $file_list);
 
-								if (!empty($_REQUEST['download']))
+								if ($request->variable('download', false))
 								{
 									$params[] = 'download=1';
 								}
@@ -829,7 +780,7 @@ class install_update extends module
 				$file_list['status'] = -1;
 				$cache->put('_diff_files', $file_list);
 
-				if (!empty($_REQUEST['download']))
+				if ($request->variable('download', false))
 				{
 					$this->include_file('includes/functions_compress.' . $phpEx);
 
@@ -922,7 +873,14 @@ class install_update extends module
 					$test_connection = false;
 					if ($test_ftp_connection || $submit)
 					{
-						$transfer = new $method(request_var('host', ''), request_var('username', ''), request_var('password', ''), request_var('root_path', ''), request_var('port', ''), request_var('timeout', ''));
+						$transfer = new $method(
+							request_var('host', ''),
+							request_var('username', ''),
+							htmlspecialchars_decode($request->untrimmed_variable('password', '')),
+							request_var('root_path', ''),
+							request_var('port', ''),
+							request_var('timeout', '')
+						);
 						$test_connection = $transfer->open_session();
 
 						// Make sure that the directory is correct by checking for the existence of common.php
@@ -963,7 +921,7 @@ class install_update extends module
 								'DATA'		=> $data,
 								'NAME'		=> $user->lang[strtoupper($method . '_' . $data)],
 								'EXPLAIN'	=> $user->lang[strtoupper($method . '_' . $data) . '_EXPLAIN'],
-								'DEFAULT'	=> (!empty($_REQUEST[$data])) ? request_var($data, '') : $default
+								'DEFAULT'	=> $request->variable($data, (string) $default),
 							));
 						}
 
@@ -1008,7 +966,14 @@ class install_update extends module
 				}
 				else
 				{
-					$transfer = new $method(request_var('host', ''), request_var('username', ''), request_var('password', ''), request_var('root_path', ''), request_var('port', ''), request_var('timeout', ''));
+					$transfer = new $method(
+						request_var('host', ''),
+						request_var('username', ''),
+						htmlspecialchars_decode($request->untrimmed_variable('password', '')),
+						request_var('root_path', ''),
+						request_var('port', ''),
+						request_var('timeout', '')
+					);
 					$transfer->open_session();
 				}
 
@@ -1123,15 +1088,9 @@ class install_update extends module
 	*/
 	function show_diff(&$update_list)
 	{
-		global $phpbb_root_path, $template, $user;
+		global $phpbb_root_path, $template, $user, $phpbb_adm_relative_path;
 
 		$this->tpl_name = 'install_update_diff';
-
-		// Got the diff template itself updated? If so, we are able to directly use it
-		if (in_array('adm/style/install_update_diff.html', $this->update_info['files']))
-		{
-			$this->tpl_name = '../../install/update/new/adm/style/install_update_diff';
-		}
 
 		$this->page_title = 'VIEWING_FILE_DIFF';
 
@@ -1359,7 +1318,7 @@ class install_update extends module
 					}
 				}*/
 
-				if (file_exists($phpbb_root_path . dirname($file)) || (strpos($file, 'styles/') !== 0 && strpos($file, 'language/') !== 0))
+				if (!phpbb_ignore_new_file_on_update($phpbb_root_path, $file))
 				{
 					$this->get_custom_info($update_list['new'], $file);
 					$update_list['new'][] = array('filename' => $file, 'custom' => false);
@@ -1654,35 +1613,6 @@ class install_update extends module
 
 		switch ($mode)
 		{
-			case 'version_info':
-				global $phpbb_root_path, $phpEx;
-				$info = get_remote_file('www.phpbb.com', '/updatecheck', ((defined('PHPBB_QA')) ? '30x_qa.txt' : '30x.txt'), $errstr, $errno);
-
-				if ($info !== false)
-				{
-					$info = explode("\n", $info);
-					$info = trim($info[0]);
-				}
-
-				if ($this->test_update !== false)
-				{
-					$info = $this->test_update;
-				}
-
-				// If info is false the fsockopen function may not be working. Instead get the latest version from our update file (and pray it is up-to-date)
-				if ($info === false)
-				{
-					$update_info = array();
-					include($phpbb_root_path . 'install/update/index.' . $phpEx);
-					$info = (empty($update_info) || !is_array($update_info)) ? false : $update_info;
-
-					if ($info !== false)
-					{
-						$info = (!empty($info['version']['to'])) ? trim($info['version']['to']) : false;
-					}
-				}
-			break;
-
 			case 'update_info':
 				global $phpbb_root_path, $phpEx;
 
@@ -1704,9 +1634,9 @@ class install_update extends module
 					$info['custom'] = array();
 /*
 					// Get custom installed styles...
-					$sql = 'SELECT template_name, template_path
-						FROM ' . STYLES_TEMPLATE_TABLE . "
-						WHERE LOWER(template_name) NOT IN ('subsilver2', 'prosilver')";
+					$sql = 'SELECT style_name, style_path
+						FROM ' . STYLES_TABLE . "
+						WHERE LOWER(style_name) NOT IN ('subsilver2', 'prosilver')";
 					$result = $db->sql_query($sql);
 
 					$templates = array();
@@ -1725,7 +1655,7 @@ class install_update extends module
 							{
 								foreach ($templates as $row)
 								{
-									$info['custom'][$filename][] = str_replace('/prosilver/', '/' . $row['template_path'] . '/', $filename);
+									$info['custom'][$filename][] = str_replace('/prosilver/', '/' . $row['style_path'] . '/', $filename);
 								}
 							}
 						}
@@ -1795,5 +1725,3 @@ class install_update extends module
 		return $diff;
 	}
 }
-
-?>

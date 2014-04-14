@@ -2,9 +2,8 @@
 /**
 *
 * @package phpBB3
-* @version $Id$
 * @copyright (c) 2005 phpBB Group
-* @license http://opensource.org/licenses/gpl-license.php GNU Public License
+* @license http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
 *
 */
 
@@ -75,9 +74,10 @@ $template->assign_vars(array(
 	'L_BACK_TO_TOP'				=> $user->lang['BACK_TO_TOP'],
 
 	'SWITCH_COLUMN_MANUALLY'	=> (!$found_switch) ? true : false,
+	'S_IN_FAQ'					=> true,
 ));
 
-page_header($l_title, false);
+page_header($l_title);
 
 $template->set_filenames(array(
 	'body' => 'faq_body.html')
@@ -85,5 +85,3 @@ $template->set_filenames(array(
 make_jumpbox(append_sid("{$phpbb_root_path}viewforum.$phpEx"));
 
 page_footer();
-
-?>

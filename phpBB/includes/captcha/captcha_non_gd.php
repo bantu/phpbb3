@@ -2,9 +2,8 @@
 /**
 *
 * @package VC
-* @version $Id$
 * @copyright (c) 2006 phpBB Group
-* @license http://opensource.org/licenses/gpl-license.php GNU Public License
+* @license http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
 *
 */
 
@@ -119,7 +118,7 @@ class captcha
 		$new_line = '';
 
 		$end = strlen($scanline) - ceil($width/2);
-		for ($i = floor($width/2); $i < $end; $i++)
+		for ($i = (int) floor($width / 2); $i < $end; $i++)
 		{
 			$pixel = ord($scanline{$i});
 
@@ -388,5 +387,3 @@ class captcha
 		);
 	}
 }
-
-?>

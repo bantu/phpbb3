@@ -1,4 +1,4 @@
-[![phpBB](http://www.phpbb.com/theme/images/logos/blue/160x52.png)](http://www.phpbb.com)
+[![phpBB](https://www.phpbb.com/theme/images/logos/blue/160x52.png)](http://www.phpbb.com)
 
 ## ABOUT
 
@@ -7,6 +7,14 @@ phpBB is a free bulletin board written in PHP.
 ## COMMUNITY
 
 Find support and lots more on [phpBB.com](http://www.phpbb.com)! Discuss the development on [area51](http://area51.phpbb.com/phpBB/index.php).
+
+## INSTALLING DEPENDENCIES
+
+To be able to run an installation from the repo (and not from a pre-built package) you need to run the following commands to install phpBB's dependencies.
+
+	cd phpBB
+	php ../composer.phar install --dev
+
 
 ## CONTRIBUTE
 
@@ -17,9 +25,11 @@ Find support and lots more on [phpBB.com](http://www.phpbb.com)! Discuss the dev
 
 ## AUTOMATED TESTING
 
-We have unit and functional tests in order to prevent regressions. You can view the bamboo continuous integration [here](http://bamboo.phpbb.com) or check our travis build below.
-develop - [![Build Status](https://secure.travis-ci.org/phpbb/phpbb3.png?branch=develop)](http://travis-ci.org/phpbb/phpbb3)
-develop-olympus - [![Build Status](https://secure.travis-ci.org/phpbb/phpbb3.png?branch=develop-olympus)](http://travis-ci.org/phpbb/phpbb3)
+We have unit and functional tests in order to prevent regressions. You can view the bamboo continuous integration [here](http://bamboo.phpbb.com) or check our travis build below:
+
+* develop [![Build Status](https://secure.travis-ci.org/phpbb/phpbb.png?branch=develop)](http://travis-ci.org/phpbb/phpbb)
+* develop-ascraeus [![Build Status](https://secure.travis-ci.org/phpbb/phpbb.png?branch=develop-ascraeus)](http://travis-ci.org/phpbb/phpbb)
+* develop-olympus [![Build Status](https://secure.travis-ci.org/phpbb/phpbb.png?branch=develop-olympus)](http://travis-ci.org/phpbb/phpbb)
 
 ## LICENSE
 
