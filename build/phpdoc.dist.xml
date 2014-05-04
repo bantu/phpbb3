@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Paths are relative to the location of this file. -->
+<phpdoc>
+	<title>phpBB Forum Software</title>
+	<parser>
+		<target>api/cache</target>
+		<extensions>
+			<extension>php</extension>
+		</extensions>
+	</parser>
+	<transformer>
+		<target>api/output</target>
+	</transformer>
+	<logging>
+		<level>warn</level>
+		<paths>
+			<default>logs/phpdoc.log</default>
+			<errors>logs/phpdoc_errors.log</errors>
+		</paths>
+	</logging>
+	<files>
+		<directory>../phpBB</directory>
+		<ignore>phpBB/cache/*</ignore>
+		<ignore>phpBB/develop/*</ignore>
+		<ignore>phpBB/files/*</ignore>
+		<ignore>phpBB/*/data/*</ignore>
+		<ignore>phpBB/config*.php</ignore>
+	</files>
+</phpdoc>
