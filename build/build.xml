@@ -17,6 +17,8 @@
 	<target name="prepare">
 		<mkdir dir="build/logs" />
 		<mkdir dir="build/api" />
+		<mkdir dir="build/api/cache" />
+		<mkdir dir="build/api/output" />
 		<mkdir dir="build/codebrowser" />
 		<mkdir dir="build/coverage" />
 		<mkdir dir="build/cpd" />
@@ -108,15 +110,9 @@
 		</if>
 	</target>
 
-	<target name="docs">
-		<!-- only works if you setup phpdoctor:
-                     git clone https://github.com/peej/phpdoctor.git
-                     and then create an executable phpdoctor in your path containing
-                     #!/bin/sh
-                     php -f /path/to/phpdoctor/phpdoc.php $@
-                -->
-		<exec dir="build"
-			command="phpdoctor phpdoc-phpbb.ini"
+	<target name="docs" depends="prepare">
+		<exec dir="."
+			command="phpBB/vendor/bin/phpdoc.php --config build/phpdoc.dist.xml"
 			passthru="true" />
 	</target>
 
