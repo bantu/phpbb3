@@ -1,5 +1,7 @@
 language: php
 
+sudo: false
+
 matrix:
   include:
     - php: 5.3.3
@@ -35,6 +37,8 @@ services:
   - redis-server
 
 install:
+  - travis/setup-proot.sh
+  - alias sudo='./proot-x86_64 -R rootfs'
   - travis/setup-phpbb.sh $DB $TRAVIS_PHP_VERSION
 
 before_script:
