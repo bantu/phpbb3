@@ -11,9 +11,6 @@
 set -e
 set -x
 
-DB=$1
-TRAVIS_PHP_VERSION=$2
-
 if [ "$DB" == "postgres" ]
 then
 	psql -c 'DROP DATABASE IF EXISTS phpbb_tests;' -U postgres

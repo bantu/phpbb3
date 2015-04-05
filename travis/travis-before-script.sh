@@ -9,5 +9,5 @@
 # the docs/CREDITS.txt file.
 #
 
-travis/setup-database.sh $DB $TRAVIS_PHP_VERSION
+. travis/setup-database.sh
 phantomjs --webdriver=8910 > /dev/null &

@@ -9,4 +9,4 @@
 # the docs/CREDITS.txt file.
 #
 
-travis/setup-phpbb.sh $DB $TRAVIS_PHP_VERSION
+. travis/setup-phpbb.sh

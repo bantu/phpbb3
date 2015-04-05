@@ -11,9 +11,6 @@
 set -e
 set -x
 
-DB=$1
-TRAVIS_PHP_VERSION=$2
-
 if [ "$TRAVIS_PHP_VERSION" == "5.3.3" -a "$DB" == "mysqli" ]
 then
 	travis/setup-exiftool.sh
