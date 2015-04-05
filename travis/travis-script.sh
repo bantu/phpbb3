@@ -9,10 +9,17 @@
 # the docs/CREDITS.txt file.
 #
 
-travis/phing-sniff.sh $DB $TRAVIS_PHP_VERSION
-travis/check-sami-parse-errors.sh $DB $TRAVIS_PHP_VERSION
-travis/check-image-icc-profiles.sh $DB $TRAVIS_PHP_VERSION
-travis/check-executable-files.sh $DB $TRAVIS_PHP_VERSION ./
+if [ "$TRAVIS_PHP_VERSION" == "5.5" -a "$DB" == "mysqli" ]
+then
+	travis/phing-sniff.sh
+fi
+
+if [ "$TRAVIS_PHP_VERSION" == "5.3.3" -a "$DB" == "mysqli" ]
+then
+	travis/check-sami-parse-errors.sh
+	travis/check-image-icc-profiles.sh
+	travis/check-executable-files.sh ./
+fi
 
 PHPUNIT_ARGS="--configuration travis/phpunit-$DB-travis.xml"
 if [ "$SLOWTESTS" = '1' ]
